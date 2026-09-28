@@ -25,7 +25,3 @@ Si dos o más empatan en el puntaje más alto, todos ganan la ronda.
 Si todos se pasan de 100, nadie gana.
 
 En multijugador, además: cada decisión tiene 30 segundos, y si se acaba el tiempo el servidor te planta (ME QUEDO). La salida rota entre rondas y se cuentan las victorias de cada jugador.
-
-Dos aclaraciones
-El texto de la pantalla REGLAS del juego es impreciso. Dice que con SIGLO ganas automáticamente si nadie te empata. En el código no es automático: quien saque 99 pierde contra otro que saque 100. El resultado depende del puntaje más alto, no de haber hecho SIGLO.
-Esto es lo que programó tu proyecto. Si en tu grupo o tu curso se juega distinto, por ejemplo con otro valor de las fichas o con premios por SIGLO, dímelo y lo ajusto.
