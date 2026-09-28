@@ -1,0 +1,7 @@
+{
+  "extraPaths": [
+    "siglo_game"
+  ],
+  "venvPath": ".",
+  "venv": ".venv"
+}

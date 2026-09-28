@@ -1,0 +1,27 @@
+# Colors and Constants for Siglo Game
+
+# Colors
+BLACK = (0, 0, 0)
+WHITE = (255, 255, 255)
+BACKGROUND_COLOR = (245, 245, 220)  # Beige
+PRIMARY_COLOR = (0, 102, 204)       # Blue
+SECONDARY_COLOR = (255, 153, 51)    # Orange
+TEXT_COLOR = (30, 30, 30)
+RED = (200, 0, 0)
+GREEN = (0, 150, 0)
+GRAY = (150, 150, 150)
+BALL_COLOR = (255, 215, 0)          # Gold-ish
+
+# Window Configuration
+WINDOW_WIDTH = 1024
+WINDOW_HEIGHT = 768
+FPS = 60
+
+# Game States
+STATE_MENU = "MENU"
+STATE_PLAYER_SELECTION = "PLAYER_SELECTION"
+STATE_RULES = "RULES"
+STATE_PLAYING = "PLAYING"
+STATE_ROUND_END = "ROUND_END"
+STATE_GAME_END = "GAME_END"
+STATE_ONLINE = "ONLINE"

@@ -1,0 +1,2 @@
+# Solo lo necesario para correr el servidor (sin pygame).
+aiohttp>=3.9.0

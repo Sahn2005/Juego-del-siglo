@@ -1,0 +1,12 @@
+# Entorno virtual (cada quien crea el suyo con: python -m venv .venv)
+.venv/
+venv/
+
+# Cachés
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Herramientas del editor
+.qodo/
+.vscode/

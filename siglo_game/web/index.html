@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Siglo · Multijugador</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2245%22 fill=%22%23d8b23f%22/><text x=%2250%22 y=%2265%22 font-size=%2255%22 text-anchor=%22middle%22>S</text></svg>">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Pantalla de conexión -->
+  <section id="screen-form" class="screen">
+    <h1 class="title">SIGLO</h1>
+    <p class="subtitle">Multijugador · juego tradicional colombiano</p>
+    <div class="balls-decor">
+      <span class="ball-decor" data-v="7"></span>
+      <span class="ball-decor" data-v="50"></span>
+      <span class="ball-decor" data-v="99"></span>
+    </div>
+
+    <form id="form-connect" class="form-connect" autocomplete="off">
+      <label for="input-name">Tu nombre</label>
+      <input id="input-name" name="name" maxlength="10" placeholder="Jugador" autofocus>
+      <button id="btn-connect" type="submit" class="btn btn-primary btn-big">JUGAR</button>
+      <p id="form-message" class="form-message" role="alert"></p>
+    </form>
+
+    <button id="btn-toggle-advanced" class="link-button" type="button">Conectar a otro servidor…</button>
+    <div id="advanced" class="advanced hidden">
+      <label for="input-server">Servidor (host o host:puerto)</label>
+      <input id="input-server" placeholder="deja vacío para usar este mismo sitio">
+    </div>
+  </section>
+
+  <!-- Pantalla de "conectando" -->
+  <section id="screen-connecting" class="screen hidden">
+    <h1 class="title">SIGLO</h1>
+    <p id="connecting-text" class="subtitle">Conectando…</p>
+    <button id="btn-cancel-connect" class="btn btn-secondary" type="button">Cancelar</button>
+  </section>
+
+  <!-- Mesa (lobby / jugando / fin de ronda) -->
+  <section id="screen-table" class="screen screen-table hidden">
+    <header class="table-header">
+      <button id="btn-leave" class="btn btn-danger btn-small" type="button">SALIR</button>
+      <div class="table-header-center">
+        <h1 class="title title-small">SIGLO</h1>
+        <p id="table-subtitle" class="table-subtitle"></p>
+      </div>
+      <div id="table-corner" class="table-corner"></div>
+    </header>
+
+    <div id="canvas-wrap" class="canvas-wrap">
+      <canvas id="table-canvas"></canvas>
+    </div>
+
+    <div id="status-line" class="status-line"></div>
+    <p id="notice" class="notice hidden"></p>
+
+    <footer id="action-bar" class="action-bar">
+      <button id="btn-start" class="btn btn-primary btn-big hidden" type="button">INICIAR PARTIDA</button>
+      <button id="btn-bola" class="btn btn-primary btn-big hidden" type="button">BOLA</button>
+      <button id="btn-me-quedo" class="btn btn-danger btn-big hidden" type="button">ME QUEDO</button>
+      <button id="btn-next" class="btn btn-primary btn-big hidden" type="button">NUEVA RONDA</button>
+    </footer>
+  </section>
+
+<script src="app.js"></script>
+</body>
+</html>

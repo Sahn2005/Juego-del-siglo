@@ -1,0 +1,10 @@
+.venv/
+venv/
+__pycache__/
+.pytest_cache/
+.qodo/
+.vscode/
+.git/
+siglo_game/tests/
+siglo_game/main.py
+cliente.py
