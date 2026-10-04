@@ -114,8 +114,9 @@ def test_form_validation_and_connection_refused(monkeypatch):
 
 
 def test_two_players_play_a_round(server, monkeypatch):
-    # Viras: Ana 50, Luis 60. Ana es la anfitriona/repartidora: se reparte a sí
-    # misma 49 = 99 (SIGLO). Luis se planta.
+    # Viras: Ana 50, Luis 60. Con solo 2 jugadores no hay repartidor: cada
+    # quien pide su propia ficha en su turno (botón BOLA, autoservicio).
+    # Ana saca 49 = 99 (SIGLO). Luis se planta.
     ana, luis = Player(), Player()
     ana.connect(server.port, "Ñandú")
     luis.connect(server.port, "Luis")
@@ -128,14 +129,15 @@ def test_two_players_play_a_round(server, monkeypatch):
     ana.until(lambda: ana.game.phase == "PLAYING")
     luis.until(lambda: luis.game.phase == "PLAYING")
     assert ana.game._is_my_turn() and not luis.game._is_my_turn()
+    assert ana.game._host_deals() is False and luis.game._host_deals() is False
     ana.draw(); luis.draw()
 
-    # Luis no es el repartidor: el cliente ni envía el REPARTIR aunque lo pulse
-    assert not luis.game._is_host()
+    # Luis pulsa fuera de turno: el cliente ni lo envía (no hay repartidor que valga).
     luis.click(luis.game.btn_repartir, monkeypatch)
     assert not luis.game.waiting_reply
 
-    # Ana es la anfitriona/repartidora: reparte la ficha a quien tiene el turno (ella misma)
+    # Ana puede pedir su propia ficha porque es su propio turno (botón BOLA).
+    assert ana.game.btn_repartir.text == "BOLA"
     ana.click(ana.game.btn_repartir, monkeypatch)
     assert ana.game.waiting_reply  # botones bloqueados hasta que responda el servidor
     ana.until(lambda: not ana.game.waiting_reply)
@@ -154,6 +156,46 @@ def test_two_players_play_a_round(server, monkeypatch):
     assert ana.game._player(luis.game.my_id)["hidden"] is False
 
     ana.game.close(); luis.game.close()
+
+
+@pytest.mark.parametrize("server", [(10, 20, 30, 5, 7)], indirect=True)
+def test_three_players_host_deals(server, monkeypatch):
+    """Con 3 o más jugadores, solo el anfitrión reparte (botón REPARTIR);
+    los demás no tienen forma de pedir su propia ficha."""
+    ana, luis, marta = Player(), Player(), Player()
+    ana.connect(server.port, "Ana")
+    luis.connect(server.port, "Luis")
+    marta.connect(server.port, "Marta")
+    ana.until(lambda: len(ana.game.snapshot["players"]) == 3)
+
+    ana.click(ana.game.btn_start, monkeypatch)
+    for pl in (ana, luis, marta):
+        pl.until(lambda pl=pl: pl.game.phase == "PLAYING")
+    assert ana.game._host_deals() and luis.game._host_deals() and marta.game._host_deals()
+    assert ana.game.btn_repartir.text == "REPARTIR"
+
+    # Luis no es el anfitrión: ni siquiera en su propio turno puede repartirse.
+    assert not luis.game._can_deal()
+    luis.click(luis.game.btn_repartir, monkeypatch)
+    assert not luis.game.waiting_reply
+
+    # Ana (anfitriona) se planta en su propio turno (ME QUEDO siempre es autoservicio).
+    assert ana.game._is_my_turn()
+    ana.click(ana.game.btn_me_quedo, monkeypatch)
+    ana.until(lambda: not ana.game.waiting_reply)
+    luis.until(lambda: luis.game._is_my_turn())
+
+    # Ahora es turno de Luis, pero sigue sin poder repartirse a sí mismo.
+    assert not luis.game._can_deal()
+    luis.click(luis.game.btn_repartir, monkeypatch)
+    assert not luis.game.waiting_reply
+
+    # Ana (anfitriona) reparte por él, aunque no sea su propio turno.
+    assert ana.game._can_deal() and not ana.game._is_my_turn()
+    ana.click(ana.game.btn_repartir, monkeypatch)
+    ana.until(lambda: not ana.game.waiting_reply)
+
+    ana.game.close(); luis.game.close(); marta.game.close()
 
 
 @pytest.mark.parametrize("server", [(10, 20)], indirect=True)

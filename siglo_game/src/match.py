@@ -17,6 +17,11 @@ from src.protocol import (
 )
 
 
+# A partir de cuántos jugadores en la mesa se activa el "repartidor": con
+# menos (el clásico 1 vs 1) cada quien se sigue sirviendo su propia ficha.
+HOST_DEALS_MIN_PLAYERS = 3
+
+
 class MatchError(Exception):
     """Acción no permitida. El mensaje está pensado para mostrarse al jugador."""
 
@@ -184,12 +189,21 @@ class Match:
         self._open_decision_window()
 
     def draw(self, seat_id: int) -> None:
-        """REPARTIR: el repartidor (anfitrión) le da una ficha a quien tenga el turno."""
+        """BOLA / REPARTIR: le da una ficha a quien tenga el turno.
+
+        Con menos de HOST_DEALS_MIN_PLAYERS jugadores (el 1 vs 1 clásico),
+        cada quien se sirve a sí mismo en su propio turno. Con esa cantidad
+        o más, solo el anfitrión (que pasa a hacer de repartidor) puede
+        repartir, y siempre le da la ficha a quien tenga el turno.
+        """
         if self.phase != PHASE_PLAYING:
             raise MatchError("No hay una ronda en curso.")
-        if seat_id != self.host_id:
-            raise MatchError("Solo el repartidor puede repartir fichas.")
         seat = self.seats[self.turn_idx]
+        if len(self.seats) >= HOST_DEALS_MIN_PLAYERS:
+            if seat_id != self.host_id:
+                raise MatchError("Solo el repartidor puede repartir fichas.")
+        elif seat_id != seat.id:
+            raise MatchError("No es tu turno.")
         ball = self.deck.draw()
         if ball is None:  # imposible con 90 fichas y 6 jugadores, pero por si acaso
             seat.player.status = "ME_QUEDO"
@@ -269,10 +283,10 @@ class Match:
                 viewer_id is not None
                 and s.id != viewer_id
                 and self.phase == PHASE_PLAYING
-                and status in ("PLAYING", "ME_QUEDO", "SIGLO")
+                and status in ("PLAYING", "ME_QUEDO", "ME_FUI", "SIGLO")
             )
             if hide:
-                shown_status = "ME_QUEDO" if status == "SIGLO" else status
+                shown_status = "ME_QUEDO" if status in ("SIGLO", "ME_FUI") else status
                 return {
                     "id": s.id,
                     "name": s.player.name,
@@ -303,5 +317,6 @@ class Match:
             "time_left": time_left,
             "winner_ids": list(self.winner_ids),
             "max_players": self.max_players,
+            "host_deals": len(self.seats) >= HOST_DEALS_MIN_PLAYERS,
             "players": [_player_view(s) for s in self.seats],
         }

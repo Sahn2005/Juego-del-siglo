@@ -162,6 +162,15 @@ class OnlineGame:
     def _is_my_turn(self):
         return (self.phase == PHASE_PLAYING and self.snapshot["turn_id"] == self.my_id)
 
+    def _host_deals(self):
+        """True si la mesa tiene suficientes jugadores para que el anfitrión
+        reparta activamente (REPARTIR). Con solo 2, cada quien se sirve (BOLA)."""
+        return bool(self.snapshot) and bool(self.snapshot.get("host_deals"))
+
+    def _can_deal(self):
+        """Quién puede pulsar el botón de sacar ficha (REPARTIR o BOLA)."""
+        return self._is_host() if self._host_deals() else self._is_my_turn()
+
     def _can_start(self):
         return self._is_host() and len(self.snapshot["players"]) >= MIN_PLAYERS
 
@@ -222,7 +231,7 @@ class OnlineGame:
                 self._send({"type": "start"})
         elif self.phase == PHASE_PLAYING:
             if not self.waiting_reply:
-                if self._is_host() and self.btn_repartir.handle_event(event):
+                if self._can_deal() and self.btn_repartir.handle_event(event):
                     self._send({"type": "draw"})
                 elif self._is_my_turn() and self.btn_me_quedo.handle_event(event):
                     self._send({"type": "stay"})
@@ -419,7 +428,8 @@ class OnlineGame:
             color = (230, 110, 90) if seconds <= 5 else board_ui.CREAM_TEXT_DIM
             ui.draw_text(f"Tiempo: {seconds} s", ui.small_font, color, cx, 615, center=True)
 
-        show_repartir = self._is_host()
+        self.btn_repartir.text = "REPARTIR" if self._host_deals() else "BOLA"
+        show_repartir = self._can_deal()
         show_me_quedo = self._is_my_turn()
         cx_pair = WINDOW_WIDTH // 2
         if show_repartir and show_me_quedo:

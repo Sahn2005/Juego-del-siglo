@@ -115,18 +115,43 @@ def test_only_current_player_can_stay():
         m.stay(b)
 
 
-def test_only_host_can_draw():
+def test_two_players_draw_is_self_service():
+    """Con solo 2 jugadores (el 1 vs 1 clásico) no hay repartidor: cada quien
+    se sirve su propia ficha en su turno, como siempre."""
     m = make_match(10, 20, 5)
     a, b = sit(m, "A", "B")
     m.start_round(a)
-    # A es el anfitrión/repartidor; B no puede repartir aunque sea su propio turno más tarde.
+    assert m.snapshot()["host_deals"] is False
+    with pytest.raises(MatchError, match="turno"):
+        m.draw(b)  # no es su turno
+    m.draw(a)      # A saca su propia ficha en su propio turno
+    assert m.current_seat().id == a  # sigue en 15, no pasó de turno
+
+
+def test_three_or_more_players_only_host_can_draw():
+    """Con 3 o más, el anfitrión pasa a ser el repartidor: solo él puede
+    repartir, y siempre le da la ficha a quien tenga el turno (no a sí
+    mismo necesariamente)."""
+    m = make_match(10, 20, 30, 5, 7)
+    a, b, c = sit(m, "A", "B", "C")
+    m.start_round(a)
+    assert m.host_id == a
+    assert m.snapshot()["host_deals"] is True
+
     with pytest.raises(MatchError, match="repartidor"):
-        m.draw(b)
+        m.draw(b)  # B no es el anfitrión, aunque más tarde sea su turno
+    with pytest.raises(MatchError, match="repartidor"):
+        m.draw(c)
+
+    m.draw(a)  # el anfitrión reparte para sí mismo (su propio turno)
+    assert m.seats[0].player.score == 15
+
     m.stay(a)
     assert m.current_seat().id == b
     with pytest.raises(MatchError, match="repartidor"):
-        m.draw(b)
-    m.draw(a)  # el anfitrión reparte aunque el turno sea de B
+        m.draw(b)  # sigue sin poder repartirse a sí mismo
+    m.draw(a)  # el anfitrión reparte para B, que es quien tiene el turno
+    assert m.seats[1].player.score == 27
 
 
 def test_actions_need_a_running_round():
@@ -158,14 +183,14 @@ def test_stay_passes_turn():
 
 def test_siglo_ends_turn_and_bust_ends_turn():
     # A: vira 50 + 49 = 99 (SIGLO). B: vira 60 + 45 = 105 (ME_FUI).
-    # A es el anfitrión/repartidor: reparte en ambos turnos.
+    # Con 2 jugadores cada quien se sirve en su propio turno.
     m = make_match(50, 60, 49, 45)
     a, b = sit(m, "A", "B")
     m.start_round(a)
     m.draw(a)
     assert status(m, a) == "SIGLO"
     assert m.current_seat().id == b
-    m.draw(a)
+    m.draw(b)
     assert status(m, b) == "ME_FUI"
 
 
@@ -175,8 +200,8 @@ def test_round_ends_and_winner_is_closest_to_100():
     m = make_match(50, 60, 49, 45)
     a, b = sit(m, "A", "B")
     m.start_round(a)
-    m.draw(a)   # A reparte para sí mismo: SIGLO 99
-    m.draw(a)   # A reparte para B (es su turno): se pasa
+    m.draw(a)   # A: SIGLO 99
+    m.draw(b)   # B: se pasa
     assert m.phase == PHASE_ROUND_END
     assert m.winner_ids == [a]
     assert m.seats[0].wins == 1
@@ -200,7 +225,7 @@ def test_everyone_busts_no_winners():
     a, b = sit(m, "A", "B")
     m.start_round(a)
     m.draw(a)   # 90 + 80 = 170
-    m.draw(a)   # 89 + 79 = 168 (A reparte para B)
+    m.draw(b)   # 89 + 79 = 168
     assert m.phase == PHASE_ROUND_END
     assert m.winner_ids == []
 
@@ -334,10 +359,23 @@ def test_snapshot_shape():
     assert snap["phase"] == PHASE_PLAYING
     assert snap["turn_id"] == a
     assert snap["host_id"] == a
+    assert snap["host_deals"] is False  # solo 2 jugadores: autoservicio
     assert snap["players"][0] == {
         "id": a, "name": "A", "score": 10, "status": "PLAYING",
         "balls": [10], "hidden": False, "wins": 0, "connected": True,
     }
+
+
+def test_snapshot_reports_host_deals_only_with_three_or_more():
+    two = make_match(10, 20)
+    a, b = sit(two, "A", "B")
+    two.start_round(a)
+    assert two.snapshot()["host_deals"] is False
+
+    three = make_match(10, 20, 30, 5, 6, 7)
+    x, y, z = sit(three, "X", "Y", "Z")
+    three.start_round(x)
+    assert three.snapshot()["host_deals"] is True
 
 
 def test_snapshot_without_viewer_is_fully_visible_for_everyone():
@@ -385,7 +423,7 @@ def test_snapshot_hides_me_quedo_but_reveals_me_fui():
     a, b = sit(m, "A", "B")
     m.start_round(a)
     m.draw(a)   # A: SIGLO
-    m.draw(a)   # B: ME_FUI
+    m.draw(b)   # B: ME_FUI
 
     snap = m.snapshot(viewer_id=a)
     siglo_seat = next(p for p in snap["players"] if p["id"] == a)

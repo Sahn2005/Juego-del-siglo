@@ -89,6 +89,19 @@ async def join_two(client, names=("Ana", "Luis")):
     return a, b
 
 
+async def join_many(client, names):
+    clients = []
+    for name in names:
+        ws = await client.ws_connect("/ws")
+        c = WsClient(ws)
+        await c.send(type="join", name=name)
+        await c.recv_until(lambda m: m["type"] == "welcome")
+        clients.append(c)
+    for c in clients:
+        await c.wait_state(lambda s: len(s["players"]) == len(clients))
+    return clients
+
+
 # ---------------------------------------------------------------- estáticos
 
 async def test_serves_index_and_assets(client):
@@ -146,8 +159,9 @@ async def test_full_round(client):
     await a.send(type="start")
     s = await a.wait_state(lambda s: s["phase"] == PHASE_PLAYING)
     assert s["turn_id"] == a.id
+    assert s["host_deals"] is False  # solo 2 jugadores: autoservicio
 
-    await a.send(type="draw")  # Ana es la anfitriona/repartidora
+    await a.send(type="draw")  # Ana pide su propia ficha en su propio turno
     s = await a.wait_state(
         lambda s: next(p for p in s["players"] if p["id"] == a.id)["status"] == "SIGLO"
     )
@@ -160,18 +174,36 @@ async def test_full_round(client):
     assert all(p["hidden"] is False for p in s["players"])
 
 
-async def test_non_host_cannot_deal(client):
+async def test_two_players_draw_out_of_turn_errors_the_offender(client):
+    """Con 2 jugadores no hay repartidor: pedir ficha fuera de turno es el
+    mismo error de siempre ("no es tu turno"), no uno de permisos."""
     a, b = await join_two(client)
     await a.send(type="start")
     await b.wait_state(lambda s: s["phase"] == PHASE_PLAYING)
 
     await b.send(type="draw")
     err = await b.recv_until(lambda m: m["type"] == "error")
-    assert "repartidor" in err["message"]
+    assert "turno" in err["message"]
 
     await a.send(type="stay")
     s = await a.wait_state(lambda s: s["turn_id"] == b.id)
     assert s["players"][0]["status"] == "ME_QUEDO"
+
+
+@pytest.mark.parametrize("client", [(10, 20, 30, 5)], indirect=True)
+async def test_non_host_cannot_deal_with_three_or_more(client):
+    a, b, c = await join_many(client, ("Ana", "Luis", "Marta"))
+    await a.send(type="start")
+    s = await c.wait_state(lambda s: s["phase"] == PHASE_PLAYING)
+    assert s["host_deals"] is True
+
+    await b.send(type="draw")  # B no es la anfitriona/repartidora
+    err = await b.recv_until(lambda m: m["type"] == "error")
+    assert "repartidor" in err["message"]
+
+    await a.send(type="draw")  # la anfitriona sí puede repartir
+    s = await a.wait_state(lambda s: s["players"][0]["balls"] != [10])
+    assert s is not None
 
 
 async def test_out_of_turn_stay_only_errors_the_offender(client):

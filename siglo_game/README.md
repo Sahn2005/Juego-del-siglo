@@ -39,7 +39,8 @@ Muestra su IP en la red local. Opciones: `--puerto 6000`, `--tiempo-turno 45`. E
 
 **2. Cada jugador** abre el juego y pulsa **MULTIJUGADOR** (o ejecuta `python cliente.py`), escribe la IP del servidor y su nombre.
 - El anfitrión (el primero en entrar) pulsa **INICIAR PARTIDA** cuando haya al menos 2 jugadores.
-- El anfitrión es también el **repartidor**: en vez de que cada quien pida su propia ficha, el anfitrión pulsa **REPARTIR** para darle la siguiente ficha a quien tenga el turno. Cada jugador conserva su propio botón **ME QUEDO** para plantarse en su turno.
+- **Con 2 jugadores** (el clásico 1 vs 1) cada quien pide su propia ficha en su turno con el botón **BOLA**, como siempre.
+- **Con 3 jugadores o más**, el anfitrión pasa a ser también el **repartidor**: en vez de que cada quien pida su ficha, el anfitrión pulsa **REPARTIR** para dársela a quien tenga el turno. En ambos casos, cada jugador conserva su propio botón **ME QUEDO** para plantarse en su turno.
 - Mientras la ronda está en curso, **no ves el puntaje ni las fichas de los demás** (solo si están "Jugando" o "Me quedo"); se revelan si alguien se pasa de 100 (Me fui) o al terminar la ronda, para todos. Esto evita hacer trampa mirando la pantalla de otro.
 - Cada turno tienes 30 s para decidir; si se acaba el tiempo, el servidor te planta (ME QUEDO).
 - Al terminar la ronda el anfitrión pulsa **NUEVA RONDA**. La salida rota entre rondas y se cuentan las victorias.
@@ -86,7 +87,8 @@ Importante: el servidor guarda **una sola mesa en memoria**, así que debe ser u
 ## Controles
 - Todo el juego se maneja mediante clics del ratón en la interfaz gráfica.
 - Modo solitario (contra la IA): botones BOLA (pedir ficha) y ME QUEDO.
-- Modo multijugador: el anfitrión usa REPARTIR (le da la ficha a quien tenga el turno); cada jugador usa su propio ME QUEDO para plantarse.
+- Modo multijugador con 2 jugadores: BOLA (autoservicio) y ME QUEDO, igual que el solitario.
+- Modo multijugador con 3+ jugadores: el anfitrión usa REPARTIR (le da la ficha a quien tenga el turno); cada jugador usa su propio ME QUEDO para plantarse.
 
 ## Pruebas
 Para ejecutar las pruebas:

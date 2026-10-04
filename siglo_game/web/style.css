@@ -217,3 +217,52 @@ input:focus { outline: none; border-color: var(--blue); }
   .screen-table { border-width: 6px; }
   .action-bar .btn { max-width: none; }
 }
+
+
+/* ---------------------------------------------------------- modal */
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: var(--cream);
+  border-radius: 16px;
+  padding: 24px;
+  max-width: 90%;
+  width: 400px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  text-align: center;
+}
+
+.modal-title {
+  margin-top: 0;
+  color: var(--felt-dark);
+}
+
+.results-list {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0;
+  text-align: left;
+}
+
+.results-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--cream-dim);
+}
+
+.results-list li:last-child {
+  border-bottom: none;
+}

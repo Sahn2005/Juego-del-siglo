@@ -21,10 +21,15 @@ async def no_cache(request: web.Request, handler):
     Sin esto, tras actualizar app.js o style.css el navegador puede seguir
     mostrando la versión vieja guardada. Con "no-cache" sigue pudiendo usar
     su copia, pero primero pregunta al servidor si cambió (barato: 304).
+
+    La ruta /ws es un WebSocket: sus headers ya se envían dentro del handler
+    (ws.prepare), así que hay que saltarla ANTES de llamar al handler para
+    no intentar modificar una respuesta que ya salió por el socket.
     """
+    if request.path == "/ws":
+        return await handler(request)
     response = await handler(request)
-    if request.path != "/ws":
-        response.headers["Cache-Control"] = "no-cache"
+    response.headers["Cache-Control"] = "no-cache"
     return response
 
 

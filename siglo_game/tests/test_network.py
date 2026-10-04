@@ -93,6 +93,17 @@ async def join_two(server, names=("Ana", "Luis")):
     return a, b
 
 
+async def join_many(server, names):
+    clients = []
+    for name in names:
+        c = await FakeClient.connect(server.port, name)
+        await c.recv_until(lambda m: m["type"] == "welcome")
+        clients.append(c)
+    for c in clients:
+        await c.wait_state(lambda s: len(s["players"]) == len(clients))
+    return clients
+
+
 # ---------------------------------------------------------------- pruebas
 
 def test_join_welcome_and_lobby_state_reaches_everyone():
@@ -147,15 +158,17 @@ def test_full_round_over_the_network():
     run(scenario, 50, 60, 49)
 
 
-def test_non_host_cannot_deal():
+def test_two_players_draw_is_self_service_over_the_network():
+    """Con solo 2 jugadores no hay repartidor: cada quien pide su propia
+    ficha en su turno, como antes. Pedirla fuera de turno sigue dando error."""
     async def scenario(server):
         a, b = await join_two(server)
         a.send(type="start")
         await b.wait_state(lambda s: s["phase"] == PHASE_PLAYING)
 
-        b.send(type="draw")  # B no es la anfitriona/repartidora
+        b.send(type="draw")  # no es su turno
         err = await b.recv_until(lambda m: m["type"] == "error")
-        assert "repartidor" in err["message"]
+        assert "turno" in err["message"]
 
         # A no recibió ningún error; sigue siendo su turno y puede jugar.
         a.send(type="stay")
@@ -163,6 +176,26 @@ def test_non_host_cannot_deal():
         assert s["players"][0]["status"] == "ME_QUEDO"
         a.close(); b.close()
     run(scenario, 10, 20)
+
+
+def test_non_host_cannot_deal_with_three_or_more():
+    """Con 3 o más jugadores, solo el anfitrión (repartidor) puede repartir."""
+    async def scenario(server):
+        a, b, c = await join_many(server, ("Ana", "Luis", "Marta"))
+        a.send(type="start")
+        await c.wait_state(lambda s: s["phase"] == PHASE_PLAYING)
+        assert c.state["host_deals"] is True
+
+        b.send(type="draw")  # B no es la anfitriona/repartidora
+        err = await b.recv_until(lambda m: m["type"] == "error")
+        assert "repartidor" in err["message"]
+
+        # A (la anfitriona) sí puede repartir, aunque sea su propio turno.
+        a.send(type="draw")
+        s = await a.wait_state(lambda s: s["players"][0]["balls"] != [10])
+        assert s is not None
+        a.close(); b.close(); c.close()
+    run(scenario, 10, 20, 30, 5)
 
 
 def test_out_of_turn_stay_only_errors_the_offender():

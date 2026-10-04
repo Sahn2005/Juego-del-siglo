@@ -184,16 +184,22 @@ function layoutCards(n, wrapWidth, wrapHeight) {
 function drawPlayerCard(ctx, rect, p, opts) {
   const { x, y, w, h } = rect;
   const cx = x + w / 2;
-  const alpha = p.connected === false ? 0.65 : 1;
   const pad = 12;
+  const hidden = !!p.hidden;
+
+  // ── Oponente en partida: no se dibuja nada ───────────────────────────
+  if (hidden) return;
 
   ctx.save();
-  ctx.globalAlpha = alpha;
+
+  // ── Fondo de la tarjeta ──────────────────────────────────────────────
+  ctx.globalAlpha = p.connected === false ? 0.65 : 1;
   ctx.shadowColor = "rgba(0,0,0,0.35)"; ctx.shadowBlur = 8; ctx.shadowOffsetY = 5;
   roundRect(ctx, x, y, w, h, 16); ctx.fillStyle = rgb(COLOR.cream); ctx.fill();
   ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
   roundRect(ctx, x + 3, y + 3, w - 6, h - 6, 13); ctx.lineWidth = 1; ctx.strokeStyle = rgb(COLOR.creamDim); ctx.stroke();
 
+  // ── Tarjeta normal (mi jugador, desconectado, o fin de ronda) ────────
   drawAvatar(ctx, p.name, cx, y + pad + 24, 24);
   if (opts.isMe) { ctx.beginPath(); ctx.arc(cx, y + pad + 24, 27, 0, Math.PI * 2); ctx.lineWidth = 2; ctx.strokeStyle = rgb(COLOR.gold); ctx.stroke(); }
 
@@ -209,19 +215,11 @@ function drawPlayerCard(ctx, rect, p, opts) {
     ctx.textAlign = "center"; ctx.fillText("Tú", cx, tagY);
   }
 
-  const hidden = !!p.hidden;
   ctx.font = "700 38px 'Segoe UI', Arial, sans-serif"; ctx.fillStyle = rgb(p.connected === false ? COLOR.inkSoft : COLOR.ink);
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  if (hidden) {
-    ctx.fillStyle = rgb(COLOR.inkSoft);
-    ctx.fillText("?", cx, y + pad + 118);
-    ctx.font = "15px 'Segoe UI', Arial, sans-serif";
-    ctx.fillText("oculto", cx, y + pad + 144);
-  } else {
-    ctx.fillText(String(p.score), cx, y + pad + 118);
-    ctx.font = "15px 'Segoe UI', Arial, sans-serif"; ctx.fillStyle = rgb(COLOR.inkSoft);
-    ctx.fillText("puntos", cx, y + pad + 144);
-  }
+  ctx.fillText(String(p.score), cx, y + pad + 118);
+  ctx.font = "15px 'Segoe UI', Arial, sans-serif"; ctx.fillStyle = rgb(COLOR.inkSoft);
+  ctx.fillText("puntos", cx, y + pad + 144);
 
   const st = STATUS_STYLE[p.status] || { bg: [150, 150, 150], label: p.status };
   drawPill(ctx, st.label, cx, y + pad + 172, st.bg);
@@ -232,26 +230,18 @@ function drawPlayerCard(ctx, rect, p, opts) {
   }
 
   const barY = y + pad + 220;
-  let ratio, barColor;
-  if (hidden) { ratio = 0.5; barColor = darken(COLOR.creamDim, 0.1); }
-  else {
-    ratio = Math.min(p.score, 100) / 100; barColor = [60, 140, 90];
-    if (p.status === "ME_FUI") { barColor = [176, 48, 48]; ratio = 1; }
-    else if (p.status === "SIGLO") barColor = COLOR.gold;
-    else if (p.score >= 90) barColor = [196, 130, 40];
-  }
+  const ratio = Math.min(p.score, 100) / 100;
+  let barColor = [60, 140, 90];
+  if (p.status === "ME_FUI") { barColor = [176, 48, 48]; }
+  else if (p.status === "SIGLO") barColor = COLOR.gold;
+  else if (p.score >= 90) barColor = [196, 130, 40];
   drawProgressBar(ctx, x + pad, barY, w - 2 * pad, 10, ratio, barColor);
 
   const trayTop = barY + 22;
   const tray = { x: x + pad, y: trayTop, w: w - 2 * pad, h: y + h - pad - trayTop };
   roundRect(ctx, tray.x, tray.y, tray.w, tray.h, 10); ctx.fillStyle = rgb(darken(COLOR.creamDim, 0.12)); ctx.fill();
-  if (hidden) {
-    ctx.font = "15px 'Segoe UI', Arial, sans-serif"; ctx.fillStyle = rgb(COLOR.inkSoft);
-    ctx.textAlign = "center"; ctx.textBaseline = "middle";
-    ctx.fillText("- - -", tray.x + tray.w / 2, tray.y + tray.h / 2);
-  } else if (p.balls && p.balls.length) {
+  if (p.balls && p.balls.length) {
     let radius = p.balls.length <= 12 ? 18 : 15;
-    // si la bandeja es baja, las fichas se achican hasta que quepan
     while (radius > 9 && ballRowHeight(p.balls.length, radius, tray.w - 8) > tray.h - 10) radius--;
     drawBallRow(ctx, p.balls, tray.x + tray.w / 2, tray.y + 6, tray.w - 8, radius);
   }
@@ -350,6 +340,7 @@ const state = {
   leaveArmedUntil: 0,
   notice: "",
   noticeUntil: 0,
+  modalShownForRound: -1,
 };
 
 function showScreen(name) {
@@ -364,6 +355,9 @@ function findPlayer(id) {
 function isHost() { return state.snapshot && state.snapshot.host_id === state.myId; }
 function isMyTurn() { return state.snapshot && state.snapshot.phase === PHASE_PLAYING && state.snapshot.turn_id === state.myId; }
 function canStart() { return isHost() && state.snapshot.players.length >= MIN_PLAYERS; }
+// Con 3+ jugadores el anfitrión reparte (REPARTIR); con 2, cada quien se sirve (BOLA).
+function hostDeals() { return !!(state.snapshot && state.snapshot.host_deals); }
+function canDeal() { return hostDeals() ? isHost() : isMyTurn(); }
 
 function notify(text) {
   state.notice = text;
@@ -440,9 +434,10 @@ el("btn-toggle-advanced").addEventListener("click", () => {
 el("btn-cancel-connect").addEventListener("click", () => backToForm(""));
 el("btn-leave").addEventListener("click", onLeaveClick);
 el("btn-start").addEventListener("click", () => { if (canStart() && !state.waitingReply) send({ type: "start" }); });
-el("btn-repartir").addEventListener("click", () => { if (isHost() && !state.waitingReply) send({ type: "draw" }); });
+el("btn-repartir").addEventListener("click", () => { if (canDeal() && !state.waitingReply) send({ type: "draw" }); });
 el("btn-me-quedo").addEventListener("click", () => { if (isMyTurn() && !state.waitingReply) send({ type: "stay" }); });
 el("btn-next").addEventListener("click", () => { if (isHost() && !state.waitingReply) send({ type: "start" }); });
+el("btn-close-modal").addEventListener("click", () => { el("results-modal").classList.add("hidden"); });
 
 // ============================================================ dibujo de la pantalla completa
 
@@ -466,15 +461,17 @@ function render() {
   const box = wrap.getBoundingClientRect();
   const wrapWidth = Math.floor(box.width) || 320;
   let wrapHeight = Math.floor(box.height) || 560;
+  // Solo mostramos la tarjeta del propio jugador en la mesa (los oponentes nunca se renderizan aquí)
+  const visiblePlayers = snap.players.filter(p => p.id === state.myId);
   // si hará falta scroll horizontal, se reserva su franja para que no tape las tarjetas
-  if (snap.players.length * (CARD_W + CARD_GAP) + CARD_GAP > wrapWidth) wrapHeight -= SCROLLBAR_RESERVE;
+  if (visiblePlayers.length * (CARD_W + CARD_GAP) + CARD_GAP > wrapWidth) wrapHeight -= SCROLLBAR_RESERVE;
 
-  const { rects, totalW, totalH } = layoutCards(snap.players.length, wrapWidth, wrapHeight);
+  const { rects, totalW, totalH } = layoutCards(visiblePlayers.length, wrapWidth, wrapHeight);
   resizeCanvas(totalW, totalH);
   ctx.clearRect(0, 0, totalW, totalH);
 
   const winnerIds = new Set(snap.winner_ids || []);
-  snap.players.forEach((p, i) => {
+  visiblePlayers.forEach((p, i) => {
     drawPlayerCard(ctx, rects[i], p, {
       isTurn: snap.phase === PHASE_PLAYING && p.id === snap.turn_id,
       isWinner: snap.phase === PHASE_ROUND_END && winnerIds.has(p.id),
@@ -501,7 +498,8 @@ function renderChrome() {
 
   el("btn-start").classList.toggle("hidden", snap.phase !== PHASE_LOBBY || !isHost());
   el("btn-start").disabled = !canStart() || state.waitingReply;
-  el("btn-repartir").classList.toggle("hidden", !(snap.phase === PHASE_PLAYING && isHost()));
+  el("btn-repartir").textContent = hostDeals() ? "REPARTIR" : "BOLA";
+  el("btn-repartir").classList.toggle("hidden", !(snap.phase === PHASE_PLAYING && canDeal()));
   el("btn-me-quedo").classList.toggle("hidden", !(snap.phase === PHASE_PLAYING && isMyTurn()));
   el("btn-repartir").disabled = state.waitingReply;
   el("btn-me-quedo").disabled = state.waitingReply;
@@ -533,6 +531,49 @@ function renderChrome() {
     if (!isHost()) {
       const host = findPlayer(snap.host_id);
       statusLine.textContent += ` · Esperando a ${host ? host.name : "el anfitrión"}…`;
+    }
+    
+    // Show results modal
+    if (state.modalShownForRound !== snap.round) {
+      const modal = el("results-modal");
+      const resultsList = el("results-list");
+      resultsList.innerHTML = "";
+      
+      // Sort players by score (closest to 100 without going over, then others)
+      const sortedPlayers = [...snap.players].sort((a, b) => {
+        const aValid = a.score <= 100 ? a.score : -1;
+        const bValid = b.score <= 100 ? b.score : -1;
+        if (aValid !== bValid) return bValid - aValid;
+        return (b.score || 0) - (a.score || 0); // Both over 100 or disconnected
+      });
+      
+      sortedPlayers.forEach(p => {
+        const li = document.createElement("li");
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = p.name + (winnerIds.has(p.id) ? " 👑" : "");
+        if (winnerIds.has(p.id)) nameSpan.style.fontWeight = "bold";
+        
+        const scoreSpan = document.createElement("span");
+        if (p.connected === false) {
+          scoreSpan.textContent = "Desconectado";
+        } else if (p.score > 100) {
+          scoreSpan.textContent = p.score + " (Se pasó)";
+          scoreSpan.style.color = "var(--red)";
+        } else if (p.score === 100 || p.score === 99) {
+          scoreSpan.textContent = p.score + " (SIGLO)";
+          scoreSpan.style.color = "var(--gold-dim)";
+          scoreSpan.style.fontWeight = "bold";
+        } else {
+          scoreSpan.textContent = p.score;
+        }
+        
+        li.appendChild(nameSpan);
+        li.appendChild(scoreSpan);
+        resultsList.appendChild(li);
+      });
+      
+      modal.classList.remove("hidden");
+      state.modalShownForRound = snap.round;
     }
   }
 
@@ -568,4 +609,4 @@ if (params.get("server")) {
 
 // Punto de apoyo para depurar desde la consola del navegador (no afecta el
 // juego). window.__siglo.state.snapshot trae la última foto de la mesa.
-window.__siglo = { state, isHost, isMyTurn, canStart, findPlayer, buildWsUrl, render };
+window.__siglo = { state, isHost, isMyTurn, canStart, hostDeals, canDeal, findPlayer, buildWsUrl, render };
