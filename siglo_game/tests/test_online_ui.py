@@ -114,7 +114,8 @@ def test_form_validation_and_connection_refused(monkeypatch):
 
 
 def test_two_players_play_a_round(server, monkeypatch):
-    # Viras: Ana 50, Luis 60. Ana saca 49 = 99 (SIGLO). Luis se planta.
+    # Viras: Ana 50, Luis 60. Ana es la anfitriona/repartidora: se reparte a sí
+    # misma 49 = 99 (SIGLO). Luis se planta.
     ana, luis = Player(), Player()
     ana.connect(server.port, "Ñandú")
     luis.connect(server.port, "Luis")
@@ -129,14 +130,19 @@ def test_two_players_play_a_round(server, monkeypatch):
     assert ana.game._is_my_turn() and not luis.game._is_my_turn()
     ana.draw(); luis.draw()
 
-    # Luis pulsa BOLA fuera de turno: el cliente ni lo envía
-    luis.click(luis.game.btn_bola, monkeypatch)
+    # Luis no es el repartidor: el cliente ni envía el REPARTIR aunque lo pulse
+    assert not luis.game._is_host()
+    luis.click(luis.game.btn_repartir, monkeypatch)
     assert not luis.game.waiting_reply
 
-    ana.click(ana.game.btn_bola, monkeypatch)
+    # Ana es la anfitriona/repartidora: reparte la ficha a quien tiene el turno (ella misma)
+    ana.click(ana.game.btn_repartir, monkeypatch)
     assert ana.game.waiting_reply  # botones bloqueados hasta que responda el servidor
     ana.until(lambda: not ana.game.waiting_reply)
     luis.until(lambda: luis.game._is_my_turn())
+
+    # Opuestamente oculto: mientras juega, Ana no ve ni el puntaje ni las fichas de Luis.
+    assert ana.game._player(luis.game.my_id)["hidden"] is True
 
     luis.click(luis.game.btn_me_quedo, monkeypatch)
     for pl in (ana, luis):
@@ -144,6 +150,8 @@ def test_two_players_play_a_round(server, monkeypatch):
         pl.draw()
     assert ana.game.snapshot["winner_ids"] == [ana.game.my_id]
     assert ana.game._player(ana.game.my_id)["status"] == "SIGLO"
+    # Al terminar la ronda, todo vuelve a ser visible.
+    assert ana.game._player(luis.game.my_id)["hidden"] is False
 
     ana.game.close(); luis.game.close()
 

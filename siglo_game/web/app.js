@@ -209,11 +209,19 @@ function drawPlayerCard(ctx, rect, p, opts) {
     ctx.textAlign = "center"; ctx.fillText("Tú", cx, tagY);
   }
 
+  const hidden = !!p.hidden;
   ctx.font = "700 38px 'Segoe UI', Arial, sans-serif"; ctx.fillStyle = rgb(p.connected === false ? COLOR.inkSoft : COLOR.ink);
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
-  ctx.fillText(String(p.score), cx, y + pad + 118);
-  ctx.font = "15px 'Segoe UI', Arial, sans-serif"; ctx.fillStyle = rgb(COLOR.inkSoft);
-  ctx.fillText("puntos", cx, y + pad + 144);
+  if (hidden) {
+    ctx.fillStyle = rgb(COLOR.inkSoft);
+    ctx.fillText("?", cx, y + pad + 118);
+    ctx.font = "15px 'Segoe UI', Arial, sans-serif";
+    ctx.fillText("oculto", cx, y + pad + 144);
+  } else {
+    ctx.fillText(String(p.score), cx, y + pad + 118);
+    ctx.font = "15px 'Segoe UI', Arial, sans-serif"; ctx.fillStyle = rgb(COLOR.inkSoft);
+    ctx.fillText("puntos", cx, y + pad + 144);
+  }
 
   const st = STATUS_STYLE[p.status] || { bg: [150, 150, 150], label: p.status };
   drawPill(ctx, st.label, cx, y + pad + 172, st.bg);
@@ -224,16 +232,24 @@ function drawPlayerCard(ctx, rect, p, opts) {
   }
 
   const barY = y + pad + 220;
-  let ratio = Math.min(p.score, 100) / 100, barColor = [60, 140, 90];
-  if (p.status === "ME_FUI") { barColor = [176, 48, 48]; ratio = 1; }
-  else if (p.status === "SIGLO") barColor = COLOR.gold;
-  else if (p.score >= 90) barColor = [196, 130, 40];
+  let ratio, barColor;
+  if (hidden) { ratio = 0.5; barColor = darken(COLOR.creamDim, 0.1); }
+  else {
+    ratio = Math.min(p.score, 100) / 100; barColor = [60, 140, 90];
+    if (p.status === "ME_FUI") { barColor = [176, 48, 48]; ratio = 1; }
+    else if (p.status === "SIGLO") barColor = COLOR.gold;
+    else if (p.score >= 90) barColor = [196, 130, 40];
+  }
   drawProgressBar(ctx, x + pad, barY, w - 2 * pad, 10, ratio, barColor);
 
   const trayTop = barY + 22;
   const tray = { x: x + pad, y: trayTop, w: w - 2 * pad, h: y + h - pad - trayTop };
   roundRect(ctx, tray.x, tray.y, tray.w, tray.h, 10); ctx.fillStyle = rgb(darken(COLOR.creamDim, 0.12)); ctx.fill();
-  if (p.balls && p.balls.length) {
+  if (hidden) {
+    ctx.font = "15px 'Segoe UI', Arial, sans-serif"; ctx.fillStyle = rgb(COLOR.inkSoft);
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText("- - -", tray.x + tray.w / 2, tray.y + tray.h / 2);
+  } else if (p.balls && p.balls.length) {
     let radius = p.balls.length <= 12 ? 18 : 15;
     // si la bandeja es baja, las fichas se achican hasta que quepan
     while (radius > 9 && ballRowHeight(p.balls.length, radius, tray.w - 8) > tray.h - 10) radius--;
@@ -424,7 +440,7 @@ el("btn-toggle-advanced").addEventListener("click", () => {
 el("btn-cancel-connect").addEventListener("click", () => backToForm(""));
 el("btn-leave").addEventListener("click", onLeaveClick);
 el("btn-start").addEventListener("click", () => { if (canStart() && !state.waitingReply) send({ type: "start" }); });
-el("btn-bola").addEventListener("click", () => { if (isMyTurn() && !state.waitingReply) send({ type: "draw" }); });
+el("btn-repartir").addEventListener("click", () => { if (isHost() && !state.waitingReply) send({ type: "draw" }); });
 el("btn-me-quedo").addEventListener("click", () => { if (isMyTurn() && !state.waitingReply) send({ type: "stay" }); });
 el("btn-next").addEventListener("click", () => { if (isHost() && !state.waitingReply) send({ type: "start" }); });
 
@@ -485,9 +501,9 @@ function renderChrome() {
 
   el("btn-start").classList.toggle("hidden", snap.phase !== PHASE_LOBBY || !isHost());
   el("btn-start").disabled = !canStart() || state.waitingReply;
-  el("btn-bola").classList.toggle("hidden", !(snap.phase === PHASE_PLAYING && isMyTurn()));
+  el("btn-repartir").classList.toggle("hidden", !(snap.phase === PHASE_PLAYING && isHost()));
   el("btn-me-quedo").classList.toggle("hidden", !(snap.phase === PHASE_PLAYING && isMyTurn()));
-  el("btn-bola").disabled = state.waitingReply;
+  el("btn-repartir").disabled = state.waitingReply;
   el("btn-me-quedo").disabled = state.waitingReply;
   el("btn-next").classList.toggle("hidden", !(snap.phase === PHASE_ROUND_END && isHost()));
   el("btn-next").disabled = state.waitingReply;

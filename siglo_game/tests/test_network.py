@@ -116,42 +116,64 @@ def test_accented_names_survive_the_wire():
 
 
 def test_full_round_over_the_network():
-    # Viras: Ana 50, Luis 60. Ana saca 49 -> 99 (SIGLO). Luis se planta con 60.
+    # Viras: Ana 50, Luis 60. Ana (anfitriona/repartidora) se reparte 49 -> 99 (SIGLO).
+    # Luis se planta con 60. Mientras la ronda está en curso cada uno solo ve su propia mano.
     async def scenario(server):
         a, b = await join_two(server)
 
         a.send(type="start")
         s = await a.wait_state(lambda s: s["phase"] == PHASE_PLAYING)
         assert s["turn_id"] == a.id
-        assert [p["balls"] for p in s["players"]] == [[50], [60]]
+        me = next(p for p in s["players"] if p["id"] == a.id)
+        opp = next(p for p in s["players"] if p["id"] == b.id)
+        assert me["balls"] == [50]
+        assert opp["hidden"] is True  # Ana no ve la mano de Luis mientras juega
 
-        a.send(type="draw")
-        s = await b.wait_state(lambda s: s["players"][0]["status"] == "SIGLO")
+        a.send(type="draw")  # Ana es la repartidora: se da a sí misma la ficha
+        s = await a.wait_state(
+            lambda s: next(p for p in s["players"] if p["id"] == a.id)["status"] == "SIGLO"
+        )
         assert s["turn_id"] == b.id
-        assert s["players"][0]["score"] == 99
+        me = next(p for p in s["players"] if p["id"] == a.id)
+        assert me["score"] == 99
 
         b.send(type="stay")
         s = await a.wait_state(lambda s: s["phase"] == PHASE_ROUND_END)
         assert s["winner_ids"] == [a.id]
         assert s["players"][0]["wins"] == 1
+        # Al terminar la ronda, todo vuelve a ser visible para todos.
+        assert all(p["hidden"] is False for p in s["players"])
         a.close(); b.close()
     run(scenario, 50, 60, 49)
 
 
-def test_out_of_turn_action_only_errors_the_offender():
+def test_non_host_cannot_deal():
     async def scenario(server):
         a, b = await join_two(server)
         a.send(type="start")
         await b.wait_state(lambda s: s["phase"] == PHASE_PLAYING)
 
-        b.send(type="draw")  # no es su turno
+        b.send(type="draw")  # B no es la anfitriona/repartidora
         err = await b.recv_until(lambda m: m["type"] == "error")
-        assert "turno" in err["message"]
+        assert "repartidor" in err["message"]
 
         # A no recibió ningún error; sigue siendo su turno y puede jugar.
         a.send(type="stay")
         s = await a.wait_state(lambda s: s["turn_id"] == b.id)
         assert s["players"][0]["status"] == "ME_QUEDO"
+        a.close(); b.close()
+    run(scenario, 10, 20)
+
+
+def test_out_of_turn_stay_only_errors_the_offender():
+    async def scenario(server):
+        a, b = await join_two(server)
+        a.send(type="start")
+        await b.wait_state(lambda s: s["phase"] == PHASE_PLAYING)
+
+        b.send(type="stay")  # no es su turno
+        err = await b.recv_until(lambda m: m["type"] == "error")
+        assert "turno" in err["message"]
         a.close(); b.close()
     run(scenario, 10, 20)
 

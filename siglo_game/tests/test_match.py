@@ -107,14 +107,26 @@ def test_cannot_start_while_playing():
 
 # ---------------------------------------------------------------- turnos
 
-def test_only_current_player_can_act():
+def test_only_current_player_can_stay():
     m = make_match(10, 20, 5)
     a, b = sit(m, "A", "B")
     m.start_round(a)
     with pytest.raises(MatchError, match="turno"):
-        m.draw(b)
-    with pytest.raises(MatchError, match="turno"):
         m.stay(b)
+
+
+def test_only_host_can_draw():
+    m = make_match(10, 20, 5)
+    a, b = sit(m, "A", "B")
+    m.start_round(a)
+    # A es el anfitrión/repartidor; B no puede repartir aunque sea su propio turno más tarde.
+    with pytest.raises(MatchError, match="repartidor"):
+        m.draw(b)
+    m.stay(a)
+    assert m.current_seat().id == b
+    with pytest.raises(MatchError, match="repartidor"):
+        m.draw(b)
+    m.draw(a)  # el anfitrión reparte aunque el turno sea de B
 
 
 def test_actions_need_a_running_round():
@@ -146,13 +158,14 @@ def test_stay_passes_turn():
 
 def test_siglo_ends_turn_and_bust_ends_turn():
     # A: vira 50 + 49 = 99 (SIGLO). B: vira 60 + 45 = 105 (ME_FUI).
+    # A es el anfitrión/repartidor: reparte en ambos turnos.
     m = make_match(50, 60, 49, 45)
     a, b = sit(m, "A", "B")
     m.start_round(a)
     m.draw(a)
     assert status(m, a) == "SIGLO"
     assert m.current_seat().id == b
-    m.draw(b)
+    m.draw(a)
     assert status(m, b) == "ME_FUI"
 
 
@@ -162,8 +175,8 @@ def test_round_ends_and_winner_is_closest_to_100():
     m = make_match(50, 60, 49, 45)
     a, b = sit(m, "A", "B")
     m.start_round(a)
-    m.draw(a)   # A: SIGLO 99
-    m.draw(b)   # B: se pasa
+    m.draw(a)   # A reparte para sí mismo: SIGLO 99
+    m.draw(a)   # A reparte para B (es su turno): se pasa
     assert m.phase == PHASE_ROUND_END
     assert m.winner_ids == [a]
     assert m.seats[0].wins == 1
@@ -187,7 +200,7 @@ def test_everyone_busts_no_winners():
     a, b = sit(m, "A", "B")
     m.start_round(a)
     m.draw(a)   # 90 + 80 = 170
-    m.draw(b)   # 89 + 79 = 168
+    m.draw(a)   # 89 + 79 = 168 (A reparte para B)
     assert m.phase == PHASE_ROUND_END
     assert m.winner_ids == []
 
@@ -323,5 +336,78 @@ def test_snapshot_shape():
     assert snap["host_id"] == a
     assert snap["players"][0] == {
         "id": a, "name": "A", "score": 10, "status": "PLAYING",
-        "balls": [10], "wins": 0, "connected": True,
+        "balls": [10], "hidden": False, "wins": 0, "connected": True,
     }
+
+
+def test_snapshot_without_viewer_is_fully_visible_for_everyone():
+    """Compatibilidad hacia atrás: sin viewer_id, nadie se oculta."""
+    m = make_match(10, 20)
+    a, b = sit(m, "A", "B")
+    m.start_round(a)
+    snap = m.snapshot()
+    for p in snap["players"]:
+        assert p["hidden"] is False
+        assert p["score"] is not None
+
+
+def test_snapshot_hides_opponents_while_playing():
+    m = make_match(10, 20)
+    a, b = sit(m, "A", "B")
+    m.start_round(a)
+
+    # A ve su propia mano completa, pero no la de B.
+    snap_a = m.snapshot(viewer_id=a)
+    me = next(p for p in snap_a["players"] if p["id"] == a)
+    opp = next(p for p in snap_a["players"] if p["id"] == b)
+    assert me["hidden"] is False
+    assert me["score"] == 10
+    assert me["balls"] == [10]
+    assert opp["hidden"] is True
+    assert opp["score"] is None
+    assert opp["balls"] == []
+    assert opp["status"] == "PLAYING"
+    # wins/connected nunca se ocultan
+    assert opp["wins"] == 0
+    assert opp["connected"] is True
+
+    # B, simétricamente, no ve la mano de A.
+    snap_b = m.snapshot(viewer_id=b)
+    opp_from_b = next(p for p in snap_b["players"] if p["id"] == a)
+    assert opp_from_b["hidden"] is True
+    assert opp_from_b["score"] is None
+
+
+def test_snapshot_hides_me_quedo_but_reveals_me_fui():
+    # A: vira 50 + 49 = 99 (SIGLO, mostrado como ME_QUEDO a los demás).
+    # B: vira 60 + 45 = 105 (ME_FUI, siempre visible).
+    m = make_match(50, 60, 49, 45)
+    a, b = sit(m, "A", "B")
+    m.start_round(a)
+    m.draw(a)   # A: SIGLO
+    m.draw(a)   # B: ME_FUI
+
+    snap = m.snapshot(viewer_id=a)
+    siglo_seat = next(p for p in snap["players"] if p["id"] == a)
+    busted_seat = next(p for p in snap["players"] if p["id"] == b)
+    # A es el viewer: su propia tarjeta siempre es visible, aunque tenga SIGLO.
+    assert siglo_seat["hidden"] is False
+    assert siglo_seat["status"] == "SIGLO"
+    # B se pasó: se revela aunque A no sea B.
+    assert busted_seat["hidden"] is False
+    assert busted_seat["status"] == "ME_FUI"
+    assert busted_seat["score"] == 105
+
+
+def test_snapshot_fully_visible_at_round_end():
+    m = make_match(40, 40)
+    a, b = sit(m, "A", "B")
+    m.start_round(a)
+    m.stay(a)
+    m.stay(b)
+    assert m.phase == PHASE_ROUND_END
+
+    snap = m.snapshot(viewer_id=a)
+    for p in snap["players"]:
+        assert p["hidden"] is False
+        assert p["score"] is not None

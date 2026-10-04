@@ -184,8 +184,12 @@ class Match:
         self._open_decision_window()
 
     def draw(self, seat_id: int) -> None:
-        """BOLA: el jugador saca una ficha."""
-        seat = self._require_turn(seat_id)
+        """REPARTIR: el repartidor (anfitrión) le da una ficha a quien tenga el turno."""
+        if self.phase != PHASE_PLAYING:
+            raise MatchError("No hay una ronda en curso.")
+        if seat_id != self.host_id:
+            raise MatchError("Solo el repartidor puede repartir fichas.")
+        seat = self.seats[self.turn_idx]
         ball = self.deck.draw()
         if ball is None:  # imposible con 90 fichas y 6 jugadores, pero por si acaso
             seat.player.status = "ME_QUEDO"
@@ -253,11 +257,42 @@ class Match:
     # ------------------------------------------------------------------
     # Foto del estado (lo que ven los clientes)
     # ------------------------------------------------------------------
-    def snapshot(self) -> dict:
+    def snapshot(self, viewer_id: Optional[int] = None) -> dict:
         current = self.current_seat()
         time_left = None
         if self.deadline is not None:
             time_left = round(max(0.0, self.deadline - self._clock()), 1)
+
+        def _player_view(s: Seat) -> dict:
+            status = s.player.status
+            hide = (
+                viewer_id is not None
+                and s.id != viewer_id
+                and self.phase == PHASE_PLAYING
+                and status in ("PLAYING", "ME_QUEDO", "SIGLO")
+            )
+            if hide:
+                shown_status = "ME_QUEDO" if status == "SIGLO" else status
+                return {
+                    "id": s.id,
+                    "name": s.player.name,
+                    "score": None,
+                    "status": shown_status,
+                    "balls": [],
+                    "hidden": True,
+                    "wins": s.wins,
+                    "connected": s.connected,
+                }
+            return {
+                "id": s.id,
+                "name": s.player.name,
+                "score": s.player.score,
+                "status": status,
+                "balls": [b.value for b in s.player.hand],
+                "hidden": False,
+                "wins": s.wins,
+                "connected": s.connected,
+            }
 
         return {
             "type": "state",
@@ -268,16 +303,5 @@ class Match:
             "time_left": time_left,
             "winner_ids": list(self.winner_ids),
             "max_players": self.max_players,
-            "players": [
-                {
-                    "id": s.id,
-                    "name": s.player.name,
-                    "score": s.player.score,
-                    "status": s.player.status,
-                    "balls": [b.value for b in s.player.hand],
-                    "wins": s.wins,
-                    "connected": s.connected,
-                }
-                for s in self.seats
-            ],
+            "players": [_player_view(s) for s in self.seats],
         }

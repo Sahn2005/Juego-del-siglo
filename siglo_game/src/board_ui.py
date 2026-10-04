@@ -247,11 +247,17 @@ def draw_progress_bar(surface, rect, ratio, color):
 
 def draw_player_card(surface, ui, rect, *, name, score, status, balls,
                      is_turn=False, is_winner=False, is_me=False,
-                     connected=True, wins=None, seconds_left=None):
+                     connected=True, wins=None, seconds_left=None,
+                     hidden=False):
     """Dibuja la tarjeta completa de un jugador dentro de `rect`.
 
     `status` es uno de los strings de Player.status (PLAYING, ME_QUEDO...).
     `wins` es None en el modo solitario (no aplica) o un entero en línea.
+
+    `hidden=True` indica que el servidor ocultó el puntaje y las fichas de
+    este jugador (es un oponente que todavía está jugando): se dibuja un
+    bandejero vacío, la etiqueta "Oculto" en vez del puntaje numérico y una
+    barra de progreso neutra que no delata nada real.
     """
     alpha = 255 if connected else 160
     card = pygame.Surface(rect.size, pygame.SRCALPHA)
@@ -281,9 +287,14 @@ def draw_player_card(surface, ui, rect, *, name, score, status, balls,
 
     score_font = getattr(ui, "score_font", ui.font)
     score_color = INK if connected else INK_SOFT
-    surf = score_font.render(str(score), True, score_color)
-    card.blit(surf, surf.get_rect(center=(cx, pad + 118)))
-    _text(card, ui.small_font, "puntos", INK_SOFT, cx, pad + 144)
+    if hidden:
+        surf = score_font.render("?", True, INK_SOFT)
+        card.blit(surf, surf.get_rect(center=(cx, pad + 118)))
+        _text(card, ui.small_font, "oculto", INK_SOFT, cx, pad + 144)
+    else:
+        surf = score_font.render(str(score), True, score_color)
+        card.blit(surf, surf.get_rect(center=(cx, pad + 118)))
+        _text(card, ui.small_font, "puntos", INK_SOFT, cx, pad + 144)
 
     bg, label = STATUS_STYLE.get(status, ((150, 150, 150), status))
     draw_pill(card, ui.small_font, label, (cx, pad + 172), bg)
@@ -292,21 +303,25 @@ def draw_player_card(surface, ui, rect, *, name, score, status, balls,
               INK_SOFT, cx, pad + 198)
 
     bar_y = pad + 220
-    ratio = min(score, 100) / 100
-    if status == "ME_FUI":
+    if hidden:
+        # Barra neutra: ni vacía ni llena, para no delatar nada real.
+        bar_color, ratio = darken(CREAM_DIM, 0.1), 0.5
+    elif status == "ME_FUI":
         bar_color, ratio = darken((176, 48, 48), 0.0), 1.0
     elif status == "SIGLO":
-        bar_color = GOLD
+        bar_color, ratio = GOLD, min(score, 100) / 100
     elif score >= 90:
-        bar_color = (196, 130, 40)
+        bar_color, ratio = (196, 130, 40), min(score, 100) / 100
     else:
-        bar_color = (60, 140, 90)
+        bar_color, ratio = (60, 140, 90), min(score, 100) / 100
     draw_progress_bar(card, pygame.Rect(pad, bar_y, local.width - 2 * pad, 10), ratio, bar_color)
 
     tray_top = bar_y + 22
     tray = pygame.Rect(pad, tray_top, local.width - 2 * pad, local.height - tray_top - pad)
     pygame.draw.rect(card, darken(CREAM_DIM, 0.12), tray, border_radius=10)
-    if balls:
+    if hidden:
+        _text(card, ui.small_font, "- - -", INK_SOFT, tray.centerx, tray.centery)
+    elif balls:
         radius = 18 if len(balls) <= 12 else 15
         draw_ball_row(card, ui.small_font, balls, tray.centerx, tray.top + 6,
                      tray.width - 8, radius=radius)

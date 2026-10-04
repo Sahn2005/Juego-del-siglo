@@ -250,9 +250,16 @@ class SigloServer:
     # Envío y temporizador
     # ------------------------------------------------------------------
     def _changed(self) -> None:
-        """Llamar después de cualquier cambio: reprograma el plazo y avisa a todos."""
+        """Llamar después de cualquier cambio: reprograma el plazo y avisa a todos.
+
+        Cada jugador recibe su propia foto del estado (personalizada), porque
+        mientras la ronda está en curso las fichas y el puntaje de los demás
+        se ocultan (ver Match.snapshot). No se puede usar un solo mensaje
+        compartido para todos.
+        """
         self._arm_timer()
-        self._broadcast(self.match.snapshot())
+        for seat_id, conn in list(self._connections.items()):
+            conn.send(self.match.snapshot(viewer_id=seat_id))
 
     def _arm_timer(self) -> None:
         if self._timer:

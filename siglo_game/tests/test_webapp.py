@@ -147,27 +147,41 @@ async def test_full_round(client):
     s = await a.wait_state(lambda s: s["phase"] == PHASE_PLAYING)
     assert s["turn_id"] == a.id
 
-    await a.send(type="draw")
-    s = await b.wait_state(lambda s: s["players"][0]["status"] == "SIGLO")
-    assert s["turn_id"] == b.id and s["players"][0]["score"] == 99
+    await a.send(type="draw")  # Ana es la anfitriona/repartidora
+    s = await a.wait_state(
+        lambda s: next(p for p in s["players"] if p["id"] == a.id)["status"] == "SIGLO"
+    )
+    me = next(p for p in s["players"] if p["id"] == a.id)
+    assert s["turn_id"] == b.id and me["score"] == 99
 
     await b.send(type="stay")
     s = await a.wait_state(lambda s: s["phase"] == PHASE_ROUND_END)
     assert s["winner_ids"] == [a.id]
+    assert all(p["hidden"] is False for p in s["players"])
 
 
-async def test_out_of_turn_only_errors_the_offender(client):
+async def test_non_host_cannot_deal(client):
     a, b = await join_two(client)
     await a.send(type="start")
     await b.wait_state(lambda s: s["phase"] == PHASE_PLAYING)
 
     await b.send(type="draw")
     err = await b.recv_until(lambda m: m["type"] == "error")
-    assert "turno" in err["message"]
+    assert "repartidor" in err["message"]
 
     await a.send(type="stay")
     s = await a.wait_state(lambda s: s["turn_id"] == b.id)
     assert s["players"][0]["status"] == "ME_QUEDO"
+
+
+async def test_out_of_turn_stay_only_errors_the_offender(client):
+    a, b = await join_two(client)
+    await a.send(type="start")
+    await b.wait_state(lambda s: s["phase"] == PHASE_PLAYING)
+
+    await b.send(type="stay")
+    err = await b.recv_until(lambda m: m["type"] == "error")
+    assert "turno" in err["message"]
 
 
 async def test_table_full_error_then_closes(client):

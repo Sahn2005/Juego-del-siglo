@@ -99,11 +99,11 @@ class OnlineGame:
         self.btn_back = Button(20, 20, 100, 40, "VOLVER", small, PRIMARY_COLOR, SECONDARY_COLOR)
         self.btn_leave = Button(20, 20, 130, 40, "SALIR", small, RED, SECONDARY_COLOR)
         self.btn_start = Button(cx - 170, 520, 340, 50, "INICIAR PARTIDA", font, PRIMARY_COLOR, SECONDARY_COLOR)
-        self.btn_bola = Button(cx - 160, 650, 130, 50, "BOLA", font, PRIMARY_COLOR, SECONDARY_COLOR)
+        self.btn_repartir = Button(cx - 160, 650, 130, 50, "REPARTIR", font, PRIMARY_COLOR, SECONDARY_COLOR)
         self.btn_me_quedo = Button(cx + 30, 650, 190, 50, "ME QUEDO", font, RED, SECONDARY_COLOR)
         self.btn_next = Button(cx - 150, 650, 300, 50, "NUEVA RONDA", font, PRIMARY_COLOR, SECONDARY_COLOR)
         self._buttons = [self.btn_connect, self.btn_back, self.btn_leave, self.btn_start,
-                         self.btn_bola, self.btn_me_quedo, self.btn_next]
+                         self.btn_repartir, self.btn_me_quedo, self.btn_next]
 
         pygame.key.set_repeat(400, 35)  # mantener BORRAR pulsado
 
@@ -221,10 +221,10 @@ class OnlineGame:
             if self._can_start() and not self.waiting_reply and self.btn_start.handle_event(event):
                 self._send({"type": "start"})
         elif self.phase == PHASE_PLAYING:
-            if self._is_my_turn() and not self.waiting_reply:
-                if self.btn_bola.handle_event(event):
+            if not self.waiting_reply:
+                if self._is_host() and self.btn_repartir.handle_event(event):
                     self._send({"type": "draw"})
-                elif self.btn_me_quedo.handle_event(event):
+                elif self._is_my_turn() and self.btn_me_quedo.handle_event(event):
                     self._send({"type": "stay"})
         elif self.phase == PHASE_ROUND_END:
             if self._is_host() and not self.waiting_reply and self.btn_next.handle_event(event):
@@ -402,6 +402,7 @@ class OnlineGame:
                 is_me=(p["id"] == self.my_id),
                 connected=p["connected"],
                 wins=p["wins"],
+                hidden=p.get("hidden", False),
             )
 
     def _draw_turn_info(self):
@@ -418,8 +419,19 @@ class OnlineGame:
             color = (230, 110, 90) if seconds <= 5 else board_ui.CREAM_TEXT_DIM
             ui.draw_text(f"Tiempo: {seconds} s", ui.small_font, color, cx, 615, center=True)
 
-        if self._is_my_turn():
-            self._draw_button(self.btn_bola, not self.waiting_reply)
+        show_repartir = self._is_host()
+        show_me_quedo = self._is_my_turn()
+        cx_pair = WINDOW_WIDTH // 2
+        if show_repartir and show_me_quedo:
+            self.btn_repartir.rect.x = cx_pair - 160
+            self.btn_me_quedo.rect.x = cx_pair + 30
+        elif show_me_quedo:
+            self.btn_me_quedo.rect.x = cx_pair - self.btn_me_quedo.rect.width // 2
+        elif show_repartir:
+            self.btn_repartir.rect.x = cx_pair - self.btn_repartir.rect.width // 2
+        if show_repartir:
+            self._draw_button(self.btn_repartir, not self.waiting_reply)
+        if show_me_quedo:
             self._draw_button(self.btn_me_quedo, not self.waiting_reply)
 
     def _draw_round_result(self):
