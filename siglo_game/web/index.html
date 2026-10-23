@@ -8,6 +8,8 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <button id="btn-music" class="music-toggle" type="button" aria-pressed="true"
+          aria-label="Silenciar música" title="Silenciar música">♫ Música: activada</button>
 
   <!-- Pantalla de conexión -->
   <section id="screen-form" class="screen">
@@ -18,18 +20,50 @@
       <span class="ball-decor" data-v="50"></span>
       <span class="ball-decor" data-v="99"></span>
     </div>
+    <button id="btn-how-to-play" class="btn btn-secondary btn-big how-to-play-button"
+            type="button" aria-haspopup="dialog" aria-controls="how-to-play-modal">¿CÓMO SE JUEGA?</button>
 
-    <form id="form-connect" class="form-connect" autocomplete="off">
-      <label for="input-name">Tu nombre</label>
-      <input id="input-name" name="name" maxlength="10" placeholder="Jugador" autofocus>
-      <button id="btn-connect" type="submit" class="btn btn-primary btn-big">JUGAR</button>
-      <p id="form-message" class="form-message" role="alert"></p>
+    <form id="form-auth" class="form-connect">
+      <h2 id="auth-title" class="auth-title">Inicia sesión</h2>
+      <label for="auth-username">Usuario</label>
+      <input id="auth-username" name="username" maxlength="10" autocomplete="username"
+             placeholder="Tu usuario" required>
+      <label for="auth-password">Contraseña</label>
+      <input id="auth-password" name="password" type="password" minlength="8" maxlength="128"
+             autocomplete="current-password" placeholder="Mínimo 8 caracteres" required>
+      <button id="btn-auth-submit" type="submit" class="btn btn-primary btn-big">INICIAR SESIÓN</button>
+      <p id="auth-message" class="form-message" role="alert"></p>
     </form>
+    <button id="btn-auth-toggle" class="link-button" type="button">Crear una cuenta</button>
 
-    <button id="btn-toggle-advanced" class="link-button" type="button">Conectar a otro servidor…</button>
-    <div id="advanced" class="advanced hidden">
-      <label for="input-server">Servidor (host o host:puerto)</label>
-      <input id="input-server" placeholder="deja vacío para usar este mismo sitio">
+    <button id="btn-guest-toggle" class="link-button" type="button">Continuar como invitado</button>
+    <div id="guest-panel" class="guest-panel hidden">
+      <form id="form-connect" class="form-connect" autocomplete="off">
+        <label for="input-name">Tu nombre</label>
+        <input id="input-name" name="name" maxlength="10" placeholder="Jugador">
+        <button id="btn-connect" type="submit" class="btn btn-primary btn-big">JUGAR</button>
+        <p id="form-message" class="form-message" role="alert"></p>
+      </form>
+    </div>
+  </section>
+
+  <section id="screen-account" class="screen hidden">
+    <h1 class="title">SIGLO</h1>
+    <p class="subtitle">Tu estado de juego</p>
+    <div class="account-card">
+      <h2>Hola, <span id="account-name"></span></h2>
+      <div class="account-stats">
+        <div><strong id="stat-played">0</strong><span>Partidas</span></div>
+        <div><strong id="stat-wins">0</strong><span>Victorias</span></div>
+        <div><strong id="stat-losses">0</strong><span>Derrotas</span></div>
+      </div>
+      <h3>Partidas jugadas</h3>
+      <ul id="history-list" class="history-list"></ul>
+      <p id="history-message" class="form-message" role="status"></p>
+      <div class="account-actions">
+        <button id="btn-account-play" class="btn btn-primary btn-big" type="button">JUGAR</button>
+        <button id="btn-account-logout" class="btn btn-secondary" type="button">CERRAR SESIÓN</button>
+      </div>
     </div>
   </section>
 
@@ -42,6 +76,13 @@
 
   <!-- Mesa (lobby / jugando / fin de ronda) -->
   <section id="screen-table" class="screen screen-table hidden">
+    <div id="status-animation" class="status-animation" aria-live="polite" aria-atomic="true"></div>
+    <aside id="opponent-panel" class="opponent-panel hidden" aria-live="polite" aria-atomic="true">
+      <span class="opponent-panel-label">OPONENTE</span>
+      <div id="opponent-avatar" class="opponent-avatar" aria-hidden="true"></div>
+      <strong id="opponent-name" class="opponent-name"></strong>
+      <span id="opponent-activity" class="opponent-activity"></span>
+    </aside>
     <header class="table-header">
       <button id="btn-leave" class="btn btn-danger btn-small" type="button">SALIR</button>
       <div class="table-header-center">
@@ -56,6 +97,8 @@
     </div>
 
     <div id="status-line" class="status-line"></div>
+    <div id="last-action-line" class="last-action-line" aria-live="polite"></div>
+    <div id="draw-request-line" class="draw-request-line" aria-live="polite"></div>
     <p id="notice" class="notice hidden"></p>
 
     <footer id="action-bar" class="action-bar">
@@ -71,6 +114,19 @@
       <h2 class="modal-title">Resultados de la ronda</h2>
       <ul id="results-list" class="results-list"></ul>
       <button id="btn-close-modal" class="btn btn-primary" type="button">Aceptar</button>
+    </div>
+  </div>
+  <div id="how-to-play-modal" class="modal hidden" role="dialog" aria-modal="true"
+       aria-labelledby="how-to-play-title">
+    <div class="modal-content how-to-play-content">
+      <h2 id="how-to-play-title" class="modal-title">¿Cómo se juega Siglo?</h2>
+      <ol class="how-to-play-list">
+        <li>El objetivo es acercarte lo más posible a 100 puntos sin pasarte. Cada bola suma su número.</li>
+        <li>En tu turno, pide una <strong>BOLA</strong> para seguir sumando o elige <strong>ME QUEDO</strong> para plantarte.</li>
+        <li>Si llegas exactamente a 99 o 100, ¡completas <strong>SIGLO</strong>! Si superas 100, quedas fuera de la ronda.</li>
+        <li>Gana quien consiga el puntaje más alto sin pasar de 100. Si hay empate, ganan todos los empatados.</li>
+      </ol>
+      <button id="btn-close-how-to-play" class="btn btn-primary" type="button">¡ENTENDIDO!</button>
     </div>
   </div>
 

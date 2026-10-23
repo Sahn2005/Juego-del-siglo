@@ -150,7 +150,14 @@ def test_three_or_more_players_only_host_can_draw():
     assert m.current_seat().id == b
     with pytest.raises(MatchError, match="repartidor"):
         m.draw(b)  # sigue sin poder repartirse a sí mismo
-    m.draw(a)  # el anfitrión reparte para B, que es quien tiene el turno
+    with pytest.raises(MatchError, match="pedir la bola"):
+        m.draw(a)  # B debe pedir la ficha antes de que se la repartan
+    with pytest.raises(MatchError, match="turno"):
+        m.request_draw(c)
+    m.request_draw(b)
+    assert m.snapshot()["draw_request"] == {"player_id": b, "name": "B"}
+    m.draw(a)  # el anfitrión reparte para B tras su solicitud
+    assert m.snapshot()["draw_request"] is None
     assert m.seats[1].player.score == 27
 
 
@@ -178,6 +185,9 @@ def test_stay_passes_turn():
     m.start_round(a)
     m.stay(a)
     assert status(m, a) == "ME_QUEDO"
+    assert m.snapshot()["last_action"] == {
+        "event_id": 1, "name": "A", "status": "ME_QUEDO",
+    }
     assert m.current_seat().id == b
 
 
@@ -189,9 +199,15 @@ def test_siglo_ends_turn_and_bust_ends_turn():
     m.start_round(a)
     m.draw(a)
     assert status(m, a) == "SIGLO"
+    assert m.snapshot()["last_action"] == {
+        "event_id": 1, "name": "A", "status": "SIGLO",
+    }
     assert m.current_seat().id == b
     m.draw(b)
     assert status(m, b) == "ME_FUI"
+    assert m.snapshot()["last_action"] == {
+        "event_id": 2, "name": "B", "status": "ME_FUI",
+    }
 
 
 # ---------------------------------------------------------------- fin de ronda

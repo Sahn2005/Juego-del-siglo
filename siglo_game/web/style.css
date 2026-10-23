@@ -33,6 +33,24 @@ button { font-family: inherit; }
 
 .hidden { display: none !important; }
 
+.music-toggle {
+  position: fixed;
+  z-index: 1100;
+  top: max(12px, var(--safe-top));
+  right: 12px;
+  padding: 9px 13px;
+  border: 1px solid rgba(216, 178, 63, .65);
+  border-radius: 999px;
+  background: rgba(12, 54, 41, .94);
+  color: var(--cream-text);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .24);
+}
+.music-toggle:hover { background: var(--felt-light); }
+.music-toggle:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+
 /* ---------------------------------------------------------- pantallas simples (form / connecting) */
 
 .screen {
@@ -82,7 +100,7 @@ button { font-family: inherit; }
   gap: 10px;
 }
 
-.form-connect label, .advanced label {
+.form-connect label {
   text-align: left;
   font-size: 14px;
   color: var(--ink-soft);
@@ -112,10 +130,32 @@ input:focus { outline: none; border-color: var(--blue); }
   text-decoration: underline; font-size: 14px; margin-top: 14px; cursor: pointer;
 }
 
-.advanced {
-  width: 100%; max-width: 380px; margin-top: 10px;
-  display: flex; flex-direction: column; gap: 6px; text-align: left;
+.auth-title { margin: 0 0 4px; color: var(--felt-dark); }
+.guest-panel { width: 100%; max-width: 380px; margin-top: 10px; }
+
+.account-card {
+  width: 100%;
+  max-width: 520px;
+  padding: 22px;
+  border-radius: 16px;
+  background: white;
+  box-shadow: 0 4px 14px rgba(0,0,0,.16);
+  text-align: left;
 }
+.account-card h2, .account-card h3 { color: var(--felt-dark); margin-top: 0; }
+.account-stats { display: flex; justify-content: space-around; gap: 10px; margin: 20px 0; }
+.account-stats div { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.account-stats strong { color: var(--felt-dark); font-size: 24px; }
+.account-stats span { color: var(--ink-soft); font-size: 13px; }
+.history-list { list-style: none; padding: 0; margin: 12px 0; max-height: 300px; overflow-y: auto; }
+.history-list li { padding: 12px 0; border-bottom: 1px solid var(--cream-dim); }
+.history-list li:last-child { border-bottom: 0; }
+.history-result { font-weight: 700; }
+.history-result.win { color: #25804a; }
+.history-result.loss { color: var(--red); }
+.history-detail { display: block; margin-top: 4px; color: var(--ink-soft); font-size: 14px; }
+.account-actions { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.account-actions .btn { width: 100%; }
 
 /* ---------------------------------------------------------- botones */
 
@@ -140,10 +180,12 @@ input:focus { outline: none; border-color: var(--blue); }
 .btn-secondary { background: #8a8f8a; }
 .btn-big { width: 100%; max-width: 340px; font-size: 19px; padding: 15px 22px; }
 .btn-small { padding: 8px 16px; font-size: 14px; min-height: 36px; }
+.how-to-play-button { margin: 0 0 20px; }
 
 /* ---------------------------------------------------------- mesa */
 
 .screen-table {
+  position: relative;
   padding: calc(10px + var(--safe-top)) 0 calc(12px + var(--safe-bottom));
   background: linear-gradient(var(--felt-light), var(--felt-dark));
   min-height: 100vh;
@@ -154,6 +196,82 @@ input:focus { outline: none; border-color: var(--blue); }
   justify-content: flex-start;
   border: 10px solid var(--rail-wood);
   border-image: none;
+}
+
+.status-animation {
+  position: absolute;
+  z-index: 10;
+  top: 40%;
+  left: 50%;
+  width: min(88%, 440px);
+  padding: 18px 24px;
+  border: 2px solid var(--gold);
+  border-radius: 18px;
+  background: rgba(12, 54, 41, .94);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, .45);
+  color: var(--cream-text);
+  font-size: clamp(22px, 6vw, 34px);
+  font-weight: 800;
+  text-align: center;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, .5);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%) scale(.65);
+}
+.status-animation.play {
+  animation: status-reveal 1.8s cubic-bezier(.2, .8, .25, 1) both;
+}
+.status-animation.me-quedo { border-color: #e9d18a; }
+.status-animation.me-fui { border-color: #ff786d; color: #ffd7d3; }
+.status-animation.siglo { border-color: var(--gold); color: #ffe797; }
+
+.opponent-panel {
+  position: absolute;
+  z-index: 5;
+  top: 50%;
+  left: 14px;
+  width: 126px;
+  padding: 13px 10px 11px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(216, 178, 63, .75);
+  border-radius: 14px;
+  background: rgba(12, 54, 41, .94);
+  box-shadow: 0 5px 18px rgba(0, 0, 0, .3);
+  color: var(--cream-text);
+  text-align: center;
+  transform: translateY(-50%);
+}
+.opponent-panel-label { color: var(--gold); font-size: 10px; font-weight: 800; letter-spacing: 1px; }
+.opponent-avatar {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border: 2px solid rgba(255, 255, 255, .45);
+  border-radius: 50%;
+  color: var(--cream);
+  font-size: 22px;
+  font-weight: 800;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, .3);
+}
+.opponent-name {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.opponent-activity { color: var(--cream-text-dim); font-size: 11px; line-height: 1.3; }
+.opponent-panel.is-active .opponent-activity { color: #ffe797; }
+
+@keyframes status-reveal {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.55) rotate(-4deg); }
+  16% { opacity: 1; transform: translate(-50%, -50%) scale(1.08) rotate(1deg); }
+  25%, 72% { opacity: 1; transform: translate(-50%, -50%) scale(1) rotate(0); }
+  100% { opacity: 0; transform: translate(-50%, -65%) scale(.92); }
 }
 
 .table-header {
@@ -196,6 +314,24 @@ input:focus { outline: none; border-color: var(--blue); }
 .status-line .timer { display: block; font-size: 14px; font-weight: 400; color: var(--cream-text-dim); }
 .status-line .timer.low { color: #e67e6e; }
 
+.last-action-line {
+  min-height: 20px;
+  padding: 0 10px;
+  color: var(--gold);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.draw-request-line {
+  min-height: 20px;
+  padding: 0 10px;
+  color: #fff1b8;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+}
+
 .notice {
   text-align: center;
   color: #ffb0a0;
@@ -216,8 +352,15 @@ input:focus { outline: none; border-color: var(--blue); }
 @media (max-width: 420px) {
   .screen-table { border-width: 6px; }
   .action-bar .btn { max-width: none; }
+  .opponent-panel { left: 8px; width: 104px; padding: 9px 7px; }
+  .opponent-avatar { width: 38px; height: 38px; font-size: 18px; }
+  .opponent-name { font-size: 12px; }
+  .opponent-activity { font-size: 10px; }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .status-animation.play { animation-duration: .01ms; }
+}
 
 /* ---------------------------------------------------------- modal */
 
@@ -243,6 +386,11 @@ input:focus { outline: none; border-color: var(--blue); }
   box-shadow: 0 4px 12px rgba(0,0,0,0.3);
   text-align: center;
 }
+
+.how-to-play-content { max-height: 88vh; overflow-y: auto; }
+.how-to-play-list { margin: 16px 0 22px; padding-left: 24px; text-align: left; }
+.how-to-play-list li { padding: 0 0 12px 4px; line-height: 1.5; }
+.how-to-play-list li::marker { color: var(--felt-dark); font-weight: 700; }
 
 .modal-title {
   margin-top: 0;

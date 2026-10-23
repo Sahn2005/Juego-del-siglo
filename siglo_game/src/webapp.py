@@ -8,6 +8,7 @@ from pathlib import Path
 
 from aiohttp import web
 
+from src.database import AccountDatabase, AccountError, SESSION_SECONDS
 from src.server import SigloServer
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
@@ -36,11 +37,86 @@ async def no_cache(request: web.Request, handler):
 def build_app(server: SigloServer) -> web.Application:
     app = web.Application(middlewares=[no_cache])
     app[SERVER_KEY] = server
+    if server.database is None:
+        server.database = AccountDatabase()
+    database = server.database
+    session_cookie = "siglo_session"
+
+    def account_for(request: web.Request):
+        return database.get_session_account(request.cookies.get(session_cookie))
+
+    async def read_json(request: web.Request) -> dict:
+        try:
+            data = await request.json()
+        except (ValueError, web.HTTPException):
+            raise web.HTTPBadRequest(text="El cuerpo debe ser JSON válido.") from None
+        if not isinstance(data, dict):
+            raise web.HTTPBadRequest(text="El cuerpo debe ser un objeto JSON.")
+        return data
+
+    def set_session(response: web.Response, token: str, request: web.Request) -> None:
+        response.set_cookie(
+            session_cookie,
+            token,
+            max_age=SESSION_SECONDS,
+            httponly=True,
+            secure=request.secure,
+            samesite="Strict",
+            path="/",
+        )
+
+    async def register(request: web.Request) -> web.Response:
+        data = await read_json(request)
+        try:
+            account = database.register(
+                str(data.get("username", "")), str(data.get("password", ""))
+            )
+        except AccountError as err:
+            raise web.HTTPBadRequest(text=str(err)) from None
+        token = database.create_session(account["id"])
+        response = web.json_response({"account": account})
+        set_session(response, token, request)
+        return response
+
+    async def login(request: web.Request) -> web.Response:
+        data = await read_json(request)
+        try:
+            account = database.authenticate(
+                str(data.get("username", "")), str(data.get("password", ""))
+            )
+        except AccountError as err:
+            raise web.HTTPUnauthorized(text=str(err)) from None
+        token = database.create_session(account["id"])
+        response = web.json_response({"account": account})
+        set_session(response, token, request)
+        return response
+
+    async def logout(request: web.Request) -> web.Response:
+        database.delete_session(request.cookies.get(session_cookie))
+        response = web.json_response({"ok": True})
+        response.del_cookie(session_cookie, path="/", samesite="Strict")
+        return response
+
+    async def me(request: web.Request) -> web.Response:
+        account = account_for(request)
+        if account is None:
+            raise web.HTTPUnauthorized(text="Inicia sesión para continuar.")
+        return web.json_response({"account": account})
+
+    async def history(request: web.Request) -> web.Response:
+        account = account_for(request)
+        if account is None:
+            raise web.HTTPUnauthorized(text="Inicia sesión para ver tu historial.")
+        return web.json_response(database.get_history(account["id"]))
 
     async def ws_handler(request: web.Request) -> web.WebSocketResponse:
+        token = request.cookies.get(session_cookie)
+        account = account_for(request)
+        if token and account is None:
+            raise web.HTTPUnauthorized(text="Tu sesión venció. Inicia sesión nuevamente.")
         ws = web.WebSocketResponse(heartbeat=25)
         await ws.prepare(request)
-        await server.handle_websocket(ws)
+        await server.handle_websocket(ws, account)
         return ws
 
     async def health(request: web.Request) -> web.Response:
@@ -53,6 +129,11 @@ def build_app(server: SigloServer) -> web.Application:
         return web.FileResponse(WEB_DIR / "index.html")
 
     app.router.add_get("/ws", ws_handler)
+    app.router.add_post("/api/register", register)
+    app.router.add_post("/api/login", login)
+    app.router.add_post("/api/logout", logout)
+    app.router.add_get("/api/me", me)
+    app.router.add_get("/api/history", history)
     app.router.add_get("/health", health)
     app.router.add_get("/", index)
     app.router.add_static("/", WEB_DIR, show_index=False, name="static")

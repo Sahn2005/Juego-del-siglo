@@ -7,6 +7,7 @@ Cliente -> servidor
     {"type": "join", "name": "Ana"}   primer mensaje obligatorio
     {"type": "start"}                 solo el anfitrión (sala de espera / fin de ronda)
     {"type": "draw"}                  BOLA (solo en tu turno)
+    {"type": "request_draw"}           solicita una bola al anfitrión (mesas de 3+)
     {"type": "stay"}                  ME QUEDO (solo en tu turno)
 
 Servidor -> cliente

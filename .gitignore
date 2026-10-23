@@ -7,6 +7,9 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
+# Datos locales de las cuentas del juego
+siglo_game/data/siglo.db
+
 # Herramientas del editor
 .qodo/
 .vscode/

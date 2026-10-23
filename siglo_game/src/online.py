@@ -4,7 +4,7 @@ partida y resultado de la ronda.
 OnlineGame tiene la misma forma que Game (handle_events / update / draw), así
 que se puede usar dentro del menú principal o solo desde cliente.py.
 El cliente no decide nada: envía lo que el jugador pide ("draw", "stay",
-"start") y dibuja el estado que manda el servidor.
+"start", "request_draw") y dibuja el estado que manda el servidor.
 """
 import math
 import time
@@ -88,6 +88,8 @@ class OnlineGame:
         self.notice_until = 0.0
         self.waiting_reply = False    # se envió una acción y aún no hay respuesta
         self.leave_armed_until = 0.0  # doble clic para salir en plena ronda
+        self._last_status_event_id = 0
+        self._status_animation = None
 
         cx = WINDOW_WIDTH // 2
         font, small = ui.font, ui.small_font
@@ -169,7 +171,28 @@ class OnlineGame:
 
     def _can_deal(self):
         """Quién puede pulsar el botón de sacar ficha (REPARTIR o BOLA)."""
-        return self._is_host() if self._host_deals() else self._is_my_turn()
+        if not self._host_deals():
+            return self._is_my_turn()
+        if not self._is_host():
+            return False
+        request = self.snapshot.get("draw_request")
+        return self._is_my_turn() or (
+            request is not None and request["player_id"] == self.snapshot["turn_id"]
+        )
+
+    def _can_request_draw(self):
+        return (
+            self._host_deals()
+            and not self._is_host()
+            and self._is_my_turn()
+            and self.snapshot.get("draw_request") is None
+        )
+
+    def _should_show_turn_timer(self):
+        if not self._is_host():
+            return True
+        host = self._player(self.my_id)
+        return host is None or host["status"] == "PLAYING"
 
     def _can_start(self):
         return self._is_host() and len(self.snapshot["players"]) >= MIN_PLAYERS
@@ -231,7 +254,9 @@ class OnlineGame:
                 self._send({"type": "start"})
         elif self.phase == PHASE_PLAYING:
             if not self.waiting_reply:
-                if self._can_deal() and self.btn_repartir.handle_event(event):
+                if self._can_request_draw() and self.btn_repartir.handle_event(event):
+                    self._send({"type": "request_draw"})
+                elif self._can_deal() and self.btn_repartir.handle_event(event):
                     self._send({"type": "draw"})
                 elif self._is_my_turn() and self.btn_me_quedo.handle_event(event):
                     self._send({"type": "stay"})
@@ -272,6 +297,7 @@ class OnlineGame:
             self.my_id = message.get("id")
             self.stage = STAGE_ONLINE
         elif kind == "state":
+            self._show_status_animation(message.get("last_action"))
             self.snapshot = message
             self.snapshot_at = time.monotonic()
             self.waiting_reply = False
@@ -288,6 +314,24 @@ class OnlineGame:
             self._back_to_form(message.get("message", "No se pudo conectar."))
         elif kind == "_closed":
             self._back_to_form("Se perdió la conexión con el servidor.")
+
+    def _show_status_animation(self, action):
+        if not action or action.get("event_id", 0) <= self._last_status_event_id:
+            return
+        self._last_status_event_id = action["event_id"]
+        labels = {
+            "ME_QUEDO": ("¡ME QUEDO!", board_ui.GOLD),
+            "ME_FUI": ("¡ME FUI!", (255, 115, 105)),
+            "SIGLO": ("¡SIGLO!", board_ui.GOLD),
+        }
+        presentation = labels.get(action["status"])
+        if presentation:
+            label, color = presentation
+            self._status_animation = {
+                "text": f"{action['name']} — {label}",
+                "color": color,
+                "started": time.monotonic(),
+            }
 
     # ------------------------------------------------------------------
     # Dibujo
@@ -388,10 +432,40 @@ class OnlineGame:
         else:
             self._draw_round_result()
 
+        self._draw_status_animation()
+
         # Botón de salir (pide confirmar en plena ronda)
         armed = time.monotonic() < self.leave_armed_until
         self.btn_leave.text = "¿SEGURO?" if armed else "SALIR"
         self.btn_leave.draw(self.screen)
+
+    def _draw_status_animation(self):
+        animation = self._status_animation
+        if animation is None:
+            return
+        progress = (time.monotonic() - animation["started"]) / 1.8
+        if progress >= 1:
+            self._status_animation = None
+            return
+
+        pop = min(1.0, progress / 0.16)
+        scale = 0.7 + 0.4 * pop if pop < 1 else 1.1 - 0.1 * min(1.0, (progress - 0.16) / 0.2)
+        alpha = 255 if progress < 0.68 else round(255 * (1 - progress) / 0.32)
+        text = self.ui.font.render(animation["text"], True, WHITE)
+        text = pygame.transform.smoothscale(
+            text, (max(1, round(text.get_width() * scale)), max(1, round(text.get_height() * scale)))
+        )
+        text.set_alpha(alpha)
+        rect = text.get_rect(center=(WINDOW_WIDTH // 2, 340))
+        panel = pygame.Surface((rect.width + 48, rect.height + 32), pygame.SRCALPHA)
+        pygame.draw.rect(
+            panel, (12, 54, 41, min(alpha, 235)), panel.get_rect(), border_radius=18
+        )
+        pygame.draw.rect(
+            panel, (*animation["color"], alpha), panel.get_rect(), width=3, border_radius=18
+        )
+        self.screen.blit(panel, panel.get_rect(center=rect.center))
+        self.screen.blit(text, rect)
 
     def _draw_board(self):
         players = self.snapshot["players"]
@@ -423,13 +497,27 @@ class OnlineGame:
             name = current["name"] if current else "..."
             ui.draw_text(f"Turno de {name}", ui.font, board_ui.CREAM_TEXT, cx, 580, center=True)
 
-        seconds = self._seconds_left()
+        seconds = self._seconds_left() if self._should_show_turn_timer() else None
         if seconds is not None:
             color = (230, 110, 90) if seconds <= 5 else board_ui.CREAM_TEXT_DIM
             ui.draw_text(f"Tiempo: {seconds} s", ui.small_font, color, cx, 615, center=True)
 
-        self.btn_repartir.text = "REPARTIR" if self._host_deals() else "BOLA"
-        show_repartir = self._can_deal()
+        request = self.snapshot.get("draw_request")
+        if request:
+            if self._is_host():
+                text = f"{request['name']} pide una bola. Presiona REPARTIR."
+            elif request["player_id"] == self.my_id:
+                text = "Solicitud enviada al anfitrión."
+            else:
+                text = f"{request['name']} pidió una bola."
+            ui.draw_text(text, ui.small_font, board_ui.GOLD, cx, 638, center=True)
+
+        self.btn_repartir.text = (
+            ("REPARTIR" if self._is_host() else "PEDIR BOLA")
+            if self._host_deals()
+            else "BOLA"
+        )
+        show_repartir = self._can_deal() or self._can_request_draw()
         show_me_quedo = self._is_my_turn()
         cx_pair = WINDOW_WIDTH // 2
         if show_repartir and show_me_quedo:

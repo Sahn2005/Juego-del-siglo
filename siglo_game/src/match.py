@@ -56,6 +56,9 @@ class Match:
         self.turn_idx = 0
         self.round_number = 0
         self.winner_ids: List[int] = []
+        self.last_action: Optional[dict] = None
+        self._last_action_id = 0
+        self.draw_request_id: Optional[int] = None
 
         # Cada vez que empieza una "ventana de decisión" (un turno nuevo, o una
         # bola más del mismo jugador) sube turn_seq y se fija un nuevo plazo.
@@ -115,6 +118,8 @@ class Match:
             seat.connected = False
             if seat.player.status == "PLAYING":
                 seat.player.status = "ME_QUEDO"
+            if self.draw_request_id == seat_id:
+                self.draw_request_id = None
             if was_current:
                 self._advance()
 
@@ -155,6 +160,8 @@ class Match:
         self.turn_idx = 0
         self.round_number = 0
         self.winner_ids = []
+        self.last_action = None
+        self.draw_request_id = None
         self.deadline = None
         self.turn_seq += 1
 
@@ -183,6 +190,8 @@ class Match:
 
         self.round_number += 1
         self.winner_ids = []
+        self.last_action = None
+        self.draw_request_id = None
         self.phase = PHASE_PLAYING
         # La salida rota entre rondas para que no siempre empiece el mismo.
         self.turn_idx = (self.round_number - 1) % len(self.seats)
@@ -202,17 +211,22 @@ class Match:
         if len(self.seats) >= HOST_DEALS_MIN_PLAYERS:
             if seat_id != self.host_id:
                 raise MatchError("Solo el repartidor puede repartir fichas.")
+            if seat.id != self.host_id and self.draw_request_id != seat.id:
+                raise MatchError("El jugador debe pedir la bola antes de que se la repartan.")
         elif seat_id != seat.id:
             raise MatchError("No es tu turno.")
+        self.draw_request_id = None
         ball = self.deck.draw()
         if ball is None:  # imposible con 90 fichas y 6 jugadores, pero por si acaso
             seat.player.status = "ME_QUEDO"
+            self._record_status_event(seat)
             self._advance()
             return
 
         seat.player.add_ball(ball)
         Rules.evaluate_player_status(seat.player)
         if seat.player.status != "PLAYING":  # SIGLO o ME_FUI: termina su turno
+            self._record_status_event(seat)
             self._advance()
         else:                                # sigue jugando: nuevo plazo
             self._open_decision_window()
@@ -220,8 +234,29 @@ class Match:
     def stay(self, seat_id: int) -> None:
         """ME QUEDO: el jugador se planta."""
         seat = self._require_turn(seat_id)
+        self.draw_request_id = None
         seat.player.status = "ME_QUEDO"
+        self._record_status_event(seat)
         self._advance()
+
+    def _record_status_event(self, seat: Seat) -> None:
+        self._last_action_id += 1
+        self.last_action = {
+            "event_id": self._last_action_id,
+            "name": seat.player.name,
+            "status": seat.player.status,
+        }
+
+    def request_draw(self, seat_id: int) -> None:
+        """El jugador en turno solicita al anfitrión que le reparta una bola."""
+        if self.phase != PHASE_PLAYING:
+            raise MatchError("No hay una ronda en curso.")
+        if len(self.seats) < HOST_DEALS_MIN_PLAYERS:
+            raise MatchError("En esta mesa puedes pedir la bola directamente.")
+        seat = self._require_turn(seat_id)
+        if seat_id == self.host_id:
+            raise MatchError("El anfitrión puede pedir su propia bola directamente.")
+        self.draw_request_id = seat_id
 
     def timeout(self, seq: int) -> bool:
         """Se acabó el plazo: el jugador en turno se planta.
@@ -231,7 +266,10 @@ class Match:
         """
         if self.phase != PHASE_PLAYING or seq != self.turn_seq:
             return False
-        self.current_seat().player.status = "ME_QUEDO"
+        self.draw_request_id = None
+        seat = self.current_seat()
+        seat.player.status = "ME_QUEDO"
+        self._record_status_event(seat)
         self._advance()
         return True
 
@@ -314,6 +352,15 @@ class Match:
             "round": self.round_number,
             "host_id": self.host_id,
             "turn_id": current.id if current else None,
+            "last_action": self.last_action,
+            "draw_request": (
+                {
+                    "player_id": self.draw_request_id,
+                    "name": self._find(self.draw_request_id).player.name,
+                }
+                if self.draw_request_id is not None
+                else None
+            ),
             "time_left": time_left,
             "winner_ids": list(self.winner_ids),
             "max_players": self.max_players,

@@ -59,6 +59,7 @@ python servidor.py                # navegador en :8080 + escritorio (TCP) en :55
 python servidor.py --sin-tcp      # solo navegador (lo normal en un hosting)
 ```
 Abre `http://IP-DEL-SERVIDOR:8080`, escribe tu nombre y listo. Los amigos usan el mismo enlace. La página se adapta al tamaño de pantalla (en celulares angostos las tarjetas se desplazan de lado).
+La versión web incluye música ambiental suave en los menús y una melodía arcade original mientras la ronda está en curso. Cuando un jugador llega a SIGLO, el navegador anuncia «¡SIGLO!» con voz en español. El cambio de música es automático; la música se activa tras la primera interacción. Puedes silenciarla o reactivarla desde el botón, y se recuerda tu preferencia en ese navegador.
 
 **Subirlo a un hosting con Docker** (Render, Railway, Fly.io, un VPS...): el `Dockerfile` de la raíz ya está listo. Los hostings suelen definir la variable `PORT`; el servidor la respeta. Ruta de comprobación de salud: `/health`.
 ```bash

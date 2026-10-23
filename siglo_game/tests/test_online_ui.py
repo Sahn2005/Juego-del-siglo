@@ -141,6 +141,7 @@ def test_two_players_play_a_round(server, monkeypatch):
     ana.click(ana.game.btn_repartir, monkeypatch)
     assert ana.game.waiting_reply  # botones bloqueados hasta que responda el servidor
     ana.until(lambda: not ana.game.waiting_reply)
+    assert ana.game._status_animation["text"] == "Ñandú — ¡SIGLO!"
     luis.until(lambda: luis.game._is_my_turn())
 
     # Opuestamente oculto: mientras juega, Ana no ve ni el puntaje ni las fichas de Luis.
@@ -152,6 +153,7 @@ def test_two_players_play_a_round(server, monkeypatch):
         pl.draw()
     assert ana.game.snapshot["winner_ids"] == [ana.game.my_id]
     assert ana.game._player(ana.game.my_id)["status"] == "SIGLO"
+    assert ana.game._status_animation["text"] == "Luis — ¡ME QUEDO!"
     # Al terminar la ronda, todo vuelve a ser visible.
     assert ana.game._player(luis.game.my_id)["hidden"] is False
 
@@ -160,8 +162,7 @@ def test_two_players_play_a_round(server, monkeypatch):
 
 @pytest.mark.parametrize("server", [(10, 20, 30, 5, 7)], indirect=True)
 def test_three_players_host_deals(server, monkeypatch):
-    """Con 3 o más jugadores, solo el anfitrión reparte (botón REPARTIR);
-    los demás no tienen forma de pedir su propia ficha."""
+    """Con 3 o más jugadores, los jugadores piden bolas al anfitrión."""
     ana, luis, marta = Player(), Player(), Player()
     ana.connect(server.port, "Ana")
     luis.connect(server.port, "Luis")
@@ -173,6 +174,7 @@ def test_three_players_host_deals(server, monkeypatch):
         pl.until(lambda pl=pl: pl.game.phase == "PLAYING")
     assert ana.game._host_deals() and luis.game._host_deals() and marta.game._host_deals()
     assert ana.game.btn_repartir.text == "REPARTIR"
+    assert ana.game._should_show_turn_timer()
 
     # Luis no es el anfitrión: ni siquiera en su propio turno puede repartirse.
     assert not luis.game._can_deal()
@@ -184,14 +186,21 @@ def test_three_players_host_deals(server, monkeypatch):
     ana.click(ana.game.btn_me_quedo, monkeypatch)
     ana.until(lambda: not ana.game.waiting_reply)
     luis.until(lambda: luis.game._is_my_turn())
+    assert not ana.game._should_show_turn_timer()
+    assert luis.game._should_show_turn_timer()
 
     # Ahora es turno de Luis, pero sigue sin poder repartirse a sí mismo.
     assert not luis.game._can_deal()
+    assert luis.game._can_request_draw()
     luis.click(luis.game.btn_repartir, monkeypatch)
-    assert not luis.game.waiting_reply
+    luis.until(lambda: not luis.game.waiting_reply)
+    ana.until(
+        lambda: ana.game.snapshot.get("draw_request")
+        and ana.game.snapshot["draw_request"]["player_id"] == luis.game.my_id
+    )
+    assert ana.game._can_deal() and not ana.game._is_my_turn()
 
     # Ana (anfitriona) reparte por él, aunque no sea su propio turno.
-    assert ana.game._can_deal() and not ana.game._is_my_turn()
     ana.click(ana.game.btn_repartir, monkeypatch)
     ana.until(lambda: not ana.game.waiting_reply)
 

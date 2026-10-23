@@ -25,3 +25,9 @@ Si dos o más empatan en el puntaje más alto, todos ganan la ronda.
 Si todos se pasan de 100, nadie gana.
 
 En multijugador, además: cada decisión tiene 30 segundos, y si se acaba el tiempo el servidor te planta (ME QUEDO). La salida rota entre rondas y se cuentan las victorias de cada jugador.
+
+## Cuentas e historial
+
+Desde el navegador puedes crear una cuenta o iniciar sesión. El panel de estado muestra las rondas terminadas, el puntaje, el estado del jugador, el resultado, los oponentes y el total de victorias y derrotas. También se puede jugar como invitado, pero esas partidas no se asocian a una cuenta.
+
+El servidor web crea la base SQLite en `siglo_game/data/siglo.db`. Para usar otra ubicación (por ejemplo, un volumen persistente en un hosting), define `SIGLO_DATABASE` con la ruta del archivo antes de iniciar `servidor.py`. Las contraseñas se guardan con PBKDF2-HMAC-SHA256 y las sesiones web usan una cookie HTTP-only.

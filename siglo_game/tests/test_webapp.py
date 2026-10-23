@@ -9,19 +9,21 @@ import asyncio
 import json
 
 import pytest
-from aiohttp import WSMsgType
+from aiohttp import ClientSession, DummyCookieJar, WSMsgType
 from aiohttp.test_utils import TestClient, TestServer
 
 from helpers import fixed_deck
+from src.database import AccountDatabase
 from src.match import Match
 from src.protocol import PHASE_LOBBY, PHASE_PLAYING, PHASE_ROUND_END, decode, encode
 from src.server import SigloServer
 from src.webapp import build_app
 
 
-def make_app(*deck_values, turn_seconds=30.0):
+def make_app(*deck_values, turn_seconds=30.0, database_path=None):
     match = Match(deck_factory=fixed_deck(*deck_values), turn_seconds=turn_seconds)
     server = SigloServer("127.0.0.1", 0, match)
+    server.database = AccountDatabase(database_path)
     return server, build_app(server)
 
 
@@ -60,9 +62,13 @@ class WsClient:
 
 
 @pytest.fixture
-async def client(request):
+async def client(request, tmp_path):
     deck_values = getattr(request, "param", (50, 60, 49))
-    server, app = make_app(*deck_values, turn_seconds=getattr(request, "turn_seconds", 30.0))
+    server, app = make_app(
+        *deck_values,
+        turn_seconds=getattr(request, "turn_seconds", 30.0),
+        database_path=str(tmp_path / "siglo-test.sqlite3"),
+    )
     await server.start()  # también el TCP, para las pruebas de mesa compartida
     test_server = TestServer(app)
     tc = TestClient(test_server)
@@ -135,6 +141,84 @@ async def test_health_endpoint(client):
     assert body == {"ok": True, "jugadores": 0, "fase": PHASE_LOBBY}
 
 
+async def test_register_login_and_logout(client):
+    response = await client.post(
+        "/api/register",
+        json={"username": "Jugadora", "password": "secreto123"},
+    )
+    assert response.status == 200
+    assert response.cookies["siglo_session"]["httponly"]
+    assert (await response.json())["account"]["username"] == "Jugadora"
+
+    response = await client.get("/api/history")
+    body = await response.json()
+    assert response.status == 200
+    assert body["stats"] == {"played": 0, "wins": 0, "losses": 0}
+    assert body["games"] == []
+
+    response = await client.post(
+        "/api/register",
+        json={"username": "jugadora", "password": "secreto123"},
+    )
+    assert response.status == 400
+
+    await client.post("/api/logout")
+    assert (await client.get("/api/history")).status == 401
+    response = await client.post(
+        "/api/login",
+        json={"username": "JUGADORA", "password": "secreto123"},
+    )
+    assert response.status == 200
+
+
+@pytest.mark.parametrize("client", [(50, 60, 49)], indirect=True)
+async def test_authenticated_round_is_saved_to_account_history(client):
+    response = await client.post(
+        "/api/register",
+        json={"username": "AnaJuego", "password": "secreto123"},
+    )
+    assert response.status == 200
+
+    ws_a = await client.ws_connect("/ws")
+    a = WsClient(ws_a)
+    await a.send(type="join", name="Nombre falso")
+    await a.recv_until(lambda message: message["type"] == "welcome")
+
+    guest_session = ClientSession(cookie_jar=DummyCookieJar())
+    ws_b = await guest_session.ws_connect(client.make_url("/ws"))
+    b = WsClient(ws_b)
+    await b.send(type="join", name="Luis")
+    await b.recv_until(lambda message: message["type"] == "welcome")
+    await a.wait_state(lambda state: len(state["players"]) == 2)
+
+    lobby = a.state
+    assert next(player for player in lobby["players"] if player["id"] == a.id)["name"] == "AnaJuego"
+    await a.send(type="start")
+    await a.wait_state(lambda state: state["phase"] == PHASE_PLAYING)
+    await a.send(type="draw")
+    state = await a.wait_state(
+        lambda state: next(player for player in state["players"] if player["id"] == a.id)["status"] == "SIGLO"
+    )
+    assert state["last_action"] == {
+        "event_id": 1, "name": "AnaJuego", "status": "SIGLO",
+    }
+    await b.send(type="stay")
+    state = await a.wait_state(lambda state: state["phase"] == PHASE_ROUND_END)
+    assert state["last_action"] == {
+        "event_id": 2, "name": "Luis", "status": "ME_QUEDO",
+    }
+
+    history = await (await client.get("/api/history")).json()
+    assert history["stats"] == {"played": 1, "wins": 1, "losses": 0}
+    assert history["games"][0]["score"] == 99
+    assert history["games"][0]["status"] == "SIGLO"
+    assert history["games"][0]["result"] == "Victoria"
+    assert history["games"][0]["opponents"] == ["Luis"]
+    await ws_a.close()
+    await ws_b.close()
+    await guest_session.close()
+
+
 # ---------------------------------------------------------------- websocket, una mesa
 
 async def test_join_and_lobby_state(client):
@@ -190,20 +274,32 @@ async def test_two_players_draw_out_of_turn_errors_the_offender(client):
     assert s["players"][0]["status"] == "ME_QUEDO"
 
 
-@pytest.mark.parametrize("client", [(10, 20, 30, 5)], indirect=True)
+@pytest.mark.parametrize("client", [(10, 20, 30, 5, 7)], indirect=True)
 async def test_non_host_cannot_deal_with_three_or_more(client):
     a, b, c = await join_many(client, ("Ana", "Luis", "Marta"))
     await a.send(type="start")
     s = await c.wait_state(lambda s: s["phase"] == PHASE_PLAYING)
     assert s["host_deals"] is True
 
-    await b.send(type="draw")  # B no es la anfitriona/repartidora
+    await b.send(type="draw")  # el anfitrión es el único que puede repartir
     err = await b.recv_until(lambda m: m["type"] == "error")
     assert "repartidor" in err["message"]
 
-    await a.send(type="draw")  # la anfitriona sí puede repartir
-    s = await a.wait_state(lambda s: s["players"][0]["balls"] != [10])
-    assert s is not None
+    await a.send(type="draw")  # la anfitriona puede repartirse en su turno
+    await a.wait_state(lambda s: s["players"][0]["balls"] != [10])
+    await a.send(type="stay")
+    await a.wait_state(lambda s: s["turn_id"] == b.id)
+
+    await b.send(type="request_draw")
+    await b.wait_state(lambda s: s.get("draw_request") and s["draw_request"]["player_id"] == b.id)
+    s = await a.wait_state(lambda s: s.get("draw_request") and s["draw_request"]["player_id"] == b.id)
+    assert s["draw_request"]["name"] == "Luis"
+
+    await a.send(type="draw")
+    s = await b.wait_state(
+        lambda s: next(player for player in s["players"] if player["id"] == b.id)["balls"] == [20, 7]
+    )
+    assert s["draw_request"] is None
 
 
 async def test_out_of_turn_stay_only_errors_the_offender(client):

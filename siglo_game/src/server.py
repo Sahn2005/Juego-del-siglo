@@ -18,10 +18,14 @@ No depende de pygame, así que puede correr en una máquina sin pantalla.
 import asyncio
 import json
 import logging
+import uuid
 from typing import Dict, Optional, Protocol
 
+from src.database import AccountDatabase
 from src.match import Match, MatchError
-from src.protocol import DEFAULT_PORT, PHASE_PLAYING, decode, encode
+from src.protocol import (
+    DEFAULT_PORT, PHASE_LOBBY, PHASE_PLAYING, PHASE_ROUND_END, decode, encode,
+)
 
 log = logging.getLogger("siglo.server")
 
@@ -102,6 +106,10 @@ class SigloServer:
         self.port = port
         self.match = match if match is not None else Match()
         self._connections: Dict[int, Connection] = {}  # id de asiento -> conexión
+        self.database: Optional[AccountDatabase] = None
+        self._seat_users: Dict[int, int] = {}
+        self._match_id = uuid.uuid4().hex
+        self._recorded_round = 0
         self._timer: Optional[asyncio.TimerHandle] = None
         self._server: Optional[asyncio.AbstractServer] = None
 
@@ -163,14 +171,14 @@ class SigloServer:
     # ------------------------------------------------------------------
     # Una conexión WebSocket (aiohttp la abre y nos pasa el `ws`)
     # ------------------------------------------------------------------
-    async def handle_websocket(self, ws) -> None:
+    async def handle_websocket(self, ws, account=None) -> None:
         from aiohttp import WSMsgType  # import perezoso: aiohttp es opcional para el TCP puro
 
         conn = _WsConnection(ws)
         seat_id = None
         try:
             first = await asyncio.wait_for(self._read_ws(ws, WSMsgType), JOIN_TIMEOUT)
-            seat_id = self._join(conn, first)
+            seat_id = self._join(conn, first, account)
             while True:
                 message = await self._read_ws(ws, WSMsgType)
                 if message is None:
@@ -194,16 +202,19 @@ class SigloServer:
     # ------------------------------------------------------------------
     # Compartido por los dos transportes
     # ------------------------------------------------------------------
-    def _join(self, conn: Connection, first: Optional[dict]) -> int:
+    def _join(self, conn: Connection, first: Optional[dict], account=None) -> int:
         if first is None or first.get("type") != "join":
             raise ValueError("se esperaba 'join'")
         try:
-            seat_id = self.match.join(first.get("name"))
+            name = account["username"] if account else first.get("name")
+            seat_id = self.match.join(name)
         except MatchError as err:
             conn.send({"type": "error", "message": str(err)})
             raise ValueError(str(err))  # el finally de quien llama limpia la conexión
 
         self._connections[seat_id] = conn
+        if account:
+            self._seat_users[seat_id] = account["id"]
         log.info("Jugador %s (%s) se unió", seat_id, self._player_name(seat_id))
         conn.send({"type": "welcome", "id": seat_id})
         self._changed()
@@ -222,6 +233,8 @@ class SigloServer:
             return
         self._connections.pop(seat_id, None)
         self.match.leave(seat_id)
+        if self.match.phase == PHASE_LOBBY:
+            self._seat_users.pop(seat_id, None)
         log.info("Jugador %s se fue", seat_id)
         self._changed()
 
@@ -238,6 +251,8 @@ class SigloServer:
                 self.match.start_round(seat_id)
             elif kind == "draw":
                 self.match.draw(seat_id)
+            elif kind == "request_draw":
+                self.match.request_draw(seat_id)
             elif kind == "stay":
                 self.match.stay(seat_id)
             else:
@@ -257,9 +272,40 @@ class SigloServer:
         se ocultan (ver Match.snapshot). No se puede usar un solo mensaje
         compartido para todos.
         """
+        self._record_finished_round()
         self._arm_timer()
         for seat_id, conn in list(self._connections.items()):
             conn.send(self.match.snapshot(viewer_id=seat_id))
+
+    def _record_finished_round(self) -> None:
+        match = self.match
+        if match.phase != PHASE_ROUND_END or match.round_number <= self._recorded_round:
+            if match.phase == PHASE_LOBBY and match.round_number == 0:
+                if self._recorded_round:
+                    self._match_id = uuid.uuid4().hex
+                self._recorded_round = 0
+            return
+        if self.database is not None:
+            participants = [
+                {
+                    "id": seat.id,
+                    "name": seat.player.name,
+                    "score": seat.player.score,
+                    "status": seat.player.status,
+                    "user_id": self._seat_users.get(seat.id),
+                }
+                for seat in match.seats
+            ]
+            self.database.record_round(
+                self._match_id, match.round_number, participants, match.winner_ids
+            )
+        self._recorded_round = match.round_number
+        connected_ids = {seat.id for seat in match.seats if seat.connected}
+        self._seat_users = {
+            seat_id: user_id
+            for seat_id, user_id in self._seat_users.items()
+            if seat_id in connected_ids
+        }
 
     def _arm_timer(self) -> None:
         if self._timer:
