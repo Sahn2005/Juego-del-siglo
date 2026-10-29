@@ -28,6 +28,14 @@ En multijugador, además: cada decisión tiene 30 segundos, y si se acaba el tie
 
 ## Cuentas e historial
 
-Desde el navegador puedes crear una cuenta o iniciar sesión. El panel de estado muestra las rondas terminadas, el puntaje, el estado del jugador, el resultado, los oponentes y el total de victorias y derrotas. También se puede jugar como invitado, pero esas partidas no se asocian a una cuenta.
+Desde el navegador, el escritorio (`cliente.py`) y el 3D (`cliente_3d.py`) puedes crear una cuenta o iniciar sesión. El panel de estado muestra las rondas terminadas, el puntaje, el estado del jugador, el resultado, los oponentes y el total de victorias y derrotas. También se puede jugar como invitado, pero esas partidas no se asocian a una cuenta.
 
 El servidor web crea la base SQLite en `siglo_game/data/siglo.db`. Para usar otra ubicación (por ejemplo, un volumen persistente en un hosting), define `SIGLO_DATABASE` con la ruta del archivo antes de iniciar `servidor.py`. Las contraseñas se guardan con PBKDF2-HMAC-SHA256 y las sesiones web usan una cookie HTTP-only.
+
+
+## Novedades de la versión fusionada
+
+- Fichas de lotería (madera, aro rojo, número rojo) en escritorio, web y 3D.
+- **Vista 3D en el navegador** (botón VISTA 3D / 2D) y cliente 3D de escritorio con Ursina (`pip install ursina`, `python cliente_3d.py`).
+- Login/registro también en el cliente de escritorio y 3D; con `DATABASE_URL` las cuentas van a PostgreSQL (si no, SQLite).
+- Con 3 o más jugadores, quien juega pide la bola (PEDIR BOLA) y el anfitrión la reparte.

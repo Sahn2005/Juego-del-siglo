@@ -414,3 +414,62 @@ input:focus { outline: none; border-color: var(--blue); }
 .results-list li:last-child {
   border-bottom: none;
 }
+/* ---------------------------------------------------------- vista 3D */
+.table-corner-box { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; min-width: 60px; }
+.three-wrap {
+  width: 100%;
+  flex: 1 1 0;
+  min-height: 420px;
+  border-radius: 14px;
+  overflow: hidden;
+}
+.three-wrap.hidden { display: none; }
+
+/* En 3D el panel de oponente sigue visible, pero en la esquina para no tapar la mesa. */
+.view3d .opponent-panel { top: 104px; left: 16px; transform: none; width: 112px; padding: 9px 8px 8px; }
+.view3d .opponent-avatar { width: 38px; height: 38px; font-size: 18px; }
+@media (max-width: 520px) {
+  .view3d .opponent-panel { top: 96px; left: 8px; width: 92px; padding: 7px 6px; }
+}
+
+/* Fichas decorativas del inicio: las mismas de lotería (madera, aro rojo, número rojo). */
+.ball-decor {
+  background: radial-gradient(circle, #eed6a8 0 56%, #c83226 58% 94%, #962a20 96%) !important;
+  color: #c83226 !important;
+  font-family: Georgia, "Times New Roman", serif !important;
+  font-weight: 700 !important;
+  text-shadow: none !important;
+  border: none !important;
+  box-shadow: 0 5px 0 #c4a06a, 0 8px 10px rgba(0, 0, 0, .3) !important;
+}
+.form-connect .btn-big, #btn-auth-submit, #btn-connect { width: 100% !important; max-width: none !important; box-sizing: border-box; }
+
+/* ------------------------------------------- botones según la dimensión */
+/* 2D: botones grandes, bien separados, para jugar con calma. */
+body:not(.view3d) .action-bar { gap: 18px; padding-top: 14px; }
+body:not(.view3d) .action-bar .btn { font-size: 20px; padding: 16px 22px; max-width: 240px; }
+
+/* 3D: barra compacta tipo madera, para dejar la mesa a la vista. */
+.view3d .action-bar {
+  gap: 10px;
+  padding: 8px 12px 4px;
+  flex-wrap: nowrap;
+}
+.view3d .action-bar .btn {
+  flex: 1 1 0;
+  max-width: 190px;
+  min-height: 44px;
+  padding: 10px 14px;
+  font-size: 16px;
+  letter-spacing: .04em;
+  border: 2px solid #e0b64a;
+  border-radius: 999px;
+  box-shadow: 0 3px 0 #5a3a1c, 0 6px 10px rgba(0, 0, 0, .35);
+}
+.view3d .action-bar .btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #5a3a1c; }
+.view3d .action-bar .btn:disabled { border-color: #9a8f70; }
+@media (max-width: 520px) {
+  .view3d .action-bar { padding: 6px 8px 2px; gap: 8px; }
+  .view3d .action-bar .btn { min-height: 42px; font-size: 14px; padding: 8px 8px; }
+  body:not(.view3d) .action-bar .btn { font-size: 17px; padding: 14px 10px; max-width: none; }
+}

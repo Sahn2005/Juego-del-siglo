@@ -4,14 +4,18 @@ Cada mensaje es un objeto JSON en una sola línea terminada en "\\n" (igual que
 el prototipo original), enviado por TCP.
 
 Cliente -> servidor
-    {"type": "join", "name": "Ana"}   primer mensaje obligatorio
+    {"type": "join", "name": "Ana"}   primer mensaje: entrar como invitado
+    {"type": "register", "username": "Ana", "password": "..."}  crear cuenta y entrar
+    {"type": "login", "username": "Ana", "password": "..."}     entrar con cuenta
     {"type": "start"}                 solo el anfitrión (sala de espera / fin de ronda)
     {"type": "draw"}                  BOLA (solo en tu turno)
     {"type": "request_draw"}           solicita una bola al anfitrión (mesas de 3+)
     {"type": "stay"}                  ME QUEDO (solo en tu turno)
 
 Servidor -> cliente
-    {"type": "welcome", "id": 3}      tu identificador de asiento
+    {"type": "welcome", "id": 3}      tu identificador de asiento (con cuenta
+                                      trae además "account": true y "stats")
+    {"type": "stats", "games_played": 4, "games_won": 1}  tras cada ronda, solo a cuentas
     {"type": "state", ...}            foto completa de la mesa (ver Match.snapshot)
     {"type": "error", "message": ""}  una acción no fue válida
 """

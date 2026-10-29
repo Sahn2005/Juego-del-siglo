@@ -77,6 +77,31 @@ Con nginx hay que dejar pasar el WebSocket: en el `location /` agrega `proxy_htt
 
 Importante: el servidor guarda **una sola mesa en memoria**, así que debe ser una única instancia (no escales a varias réplicas) y se reinicia limpia si se cae. No tiene contraseña: cualquiera con el enlace puede sentarse.
 
+## Cuentas, historial y base de datos
+
+Hay tres formas de entrar: **invitado** (no se guarda nada), **iniciar sesión** o **crear cuenta**.
+
+- **Navegador:** pantalla de inicio con usuario y contraseña (sesión por cookie). Muestra tus partidas, victorias y derrotas.
+- **Escritorio (`cliente.py`) y 3D (`cliente_3d.py`):** pestañas *Invitado / Iniciar sesión / Registrarme*; la mesa muestra tus partidas jugadas y ganadas.
+- Usuario: 3 a 10 caracteres (letras, números o `_`), sin distinguir mayúsculas. Contraseña: 8 a 128 caracteres, guardada solo como hash PBKDF2-SHA256 con sal.
+- Una misma cuenta no puede sentarse dos veces en la mesa.
+
+**Dónde se guardan los datos**
+- Por defecto, en **SQLite**: `siglo_game/data/siglo.db` (cámbialo con la variable `SIGLO_DATABASE`).
+- Si existe `DATABASE_URL`, usa **PostgreSQL** (crea las tablas `acct_users`, `acct_sessions` y `acct_games` solo). Es lo recomendado en un hosting como Render, donde el disco se borra al reiniciar.
+
+En Render: *New + → PostgreSQL* (plan gratis), copia su **Internal Database URL**, y en tu Web Service ve a *Environment → Add Environment Variable*: `DATABASE_URL` = esa URL. Guarda y Render redespliega solo.
+
+Pruebas contra un PostgreSQL real (se omiten si no hay): `SIGLO_TEST_DATABASE_URL=postgresql://postgres:postgres@localhost/siglo_test pytest`.
+
+## Vista 3D en el navegador
+
+En la mesa del navegador hay un botón **VISTA 3D / VISTA 2D** (arriba a la derecha). Usa three.js (incluido en `web/vendor/`, no hace falta instalar nada) y recuerda tu elección. Si el navegador no soporta WebGL, se queda en 2D.
+
+## Cliente 3D de escritorio (opcional, Ursina)
+
+`pip install ursina` y luego `python cliente_3d.py` desde la raíz del proyecto (con `servidor.py` corriendo). Solo escritorio.
+
 ## Reglas Principales
 - **Bolas**: 90 fichas numeradas del 1 al 90 sin repetición.
 - **Viras**: Fichas mostradas al inicio.

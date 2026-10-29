@@ -36,10 +36,12 @@ class NetworkClient:
         self._send_lock = threading.Lock()
         self._closed = False
 
-    def connect(self, host: str, port: int, name: str) -> None:
-        """Empieza a conectar en segundo plano y, al lograrlo, envía 'join'."""
+    def connect(self, host: str, port: int, name: str, auth: "dict | None" = None) -> None:
+        """Empieza a conectar en segundo plano y, al lograrlo, envía el primer
+        mensaje: 'join' (invitado) o, si se pasa `auth`, un 'login'/'register'
+        ya armado, p. ej. {"type": "login", "username": ..., "password": ...}."""
         thread = threading.Thread(
-            target=self._run, args=(host, port, name), daemon=True
+            target=self._run, args=(host, port, name, auth), daemon=True
         )
         thread.start()
 
@@ -75,7 +77,7 @@ class NetworkClient:
             sock.close()
 
     # ------------------------------------------------------------------
-    def _run(self, host: str, port: int, name: str) -> None:
+    def _run(self, host: str, port: int, name: str, auth=None) -> None:
         try:
             sock = socket.create_connection((host, port), timeout=CONNECT_TIMEOUT)
         except OSError as err:
@@ -89,7 +91,7 @@ class NetworkClient:
         sock.settimeout(None)
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         self._sock = sock
-        self.send({"type": "join", "name": name})
+        self.send(auth if auth else {"type": "join", "name": name})
 
         buffer = b""
         try:

@@ -195,6 +195,21 @@ class AccountDatabase:
                     ),
                 )
 
+    def get_stats(self, user_id: int) -> Dict[str, int]:
+        """Partidas jugadas y ganadas (lo que muestran los clientes de escritorio y 3D)."""
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT COUNT(*) AS played, "
+                "COALESCE(SUM(CASE WHEN result = 'Victoria' THEN 1 ELSE 0 END), 0) AS wins "
+                "FROM games WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+        return {"games_played": row["played"], "games_won": row["wins"]}
+
+    def close(self) -> None:
+        if self._keeper is not None:
+            self._keeper.close()
+
     def get_history(self, user_id: int) -> Dict[str, object]:
         with self._connect() as connection:
             account = connection.execute(

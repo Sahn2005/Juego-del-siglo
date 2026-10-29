@@ -68,41 +68,59 @@ function hashName(s) {
 
 // ============================================================ dibujo: fichas y tarjetas
 
-function drawBall(ctx, value, x, y, r, vira) {
-  const base = decileColor(value);
+// Ficha de lotería: disco de madera con aro rojo y el número en rojo.
+const CHIP = {
+  face: [238, 214, 168], edge: [196, 160, 106], edgeDark: [150, 114, 66], red: [200, 50, 38],
+};
+
+function drawBall(ctx, value, x, y, r, vira, blank) {
+  const t = Math.max(3, Math.round(r * 0.24));   // grosor del disco
+
   if (vira) {
-    ctx.beginPath(); ctx.arc(x, y, r + 4, 0, Math.PI * 2);
+    ctx.beginPath(); ctx.arc(x, y + t / 2, r + 4, 0, Math.PI * 2);
     ctx.fillStyle = rgb(COLOR.gold); ctx.fill();
     ctx.lineWidth = 1; ctx.strokeStyle = rgb(darken(COLOR.gold, 0.3)); ctx.stroke();
   }
-  
-  // Sombra exterior
-  ctx.beginPath(); ctx.arc(x + 2, y + 3, r, 0, Math.PI * 2);
-  ctx.fillStyle = "rgba(0,0,0,0.28)"; ctx.fill();
-  
-  // Cuerpo de la ficha (balota)
-  const bgGrad = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r * 1.1);
-  bgGrad.addColorStop(0, rgb(base));
-  bgGrad.addColorStop(1, rgb(darken(base, 0.4)));
+
+  // Sombra sobre el paño
+  ctx.beginPath(); ctx.ellipse(x + 2, y + t + 4, r, r * 0.95, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "rgba(0,0,0,0.30)"; ctx.fill();
+
+  // Canto de madera: disco inferior + rectángulo
+  ctx.fillStyle = rgb(CHIP.edgeDark);
+  ctx.beginPath(); ctx.arc(x, y + t, r, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = rgb(CHIP.edge);
+  ctx.fillRect(x - r, y, r * 2, t);
+  ctx.strokeStyle = rgb(CHIP.edgeDark); ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x - r, y); ctx.lineTo(x - r, y + t);
+  ctx.moveTo(x + r, y); ctx.lineTo(x + r, y + t); ctx.stroke();
+
+  // Cara de madera
   ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fillStyle = bgGrad; ctx.fill();
-  ctx.lineWidth = Math.max(1, r / 15); ctx.strokeStyle = "rgba(0,0,0,0.5)"; ctx.stroke();
+  ctx.fillStyle = rgb(CHIP.face); ctx.fill();
+  if (blank) {
+    ctx.strokeStyle = rgb(CHIP.edge); ctx.stroke();
+    ctx.beginPath(); ctx.arc(x, y, r * 0.7, 0, Math.PI * 2);
+    ctx.strokeStyle = rgb(darken(CHIP.face, 0.06)); ctx.stroke();
+    return;
+  }
 
-  // Círculo blanco central (estilo lotería/bingo)
-  const innerR = r * 0.65;
-  ctx.beginPath(); ctx.arc(x, y, innerR, 0, Math.PI * 2);
-  ctx.fillStyle = rgb(COLOR.cream); ctx.fill();
-  ctx.lineWidth = 1; ctx.strokeStyle = "rgba(0,0,0,0.15)"; ctx.stroke();
+  // Aro rojo y centro claro
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = rgb(CHIP.red); ctx.fill();
+  ctx.strokeStyle = rgb(darken(CHIP.red, 0.25)); ctx.stroke();
+  ctx.beginPath(); ctx.arc(x, y, r * 0.76, 0, Math.PI * 2);
+  ctx.fillStyle = rgb(CHIP.face); ctx.fill();
 
-  // Número (siempre oscuro dentro del círculo blanco)
-  ctx.fillStyle = rgb(COLOR.ink);
-  ctx.font = `700 ${Math.round(r * 0.7)}px "Segoe UI", Arial, sans-serif`;
+  // Número con serifa, como en las fichas reales
+  ctx.fillStyle = rgb(CHIP.red);
+  ctx.font = `700 ${Math.round(r * (value < 100 ? 0.95 : 0.8))}px Georgia, "Times New Roman", serif`;
   ctx.textAlign = "center"; ctx.textBaseline = "middle";
   ctx.fillText(String(value), x, y + 1);
 
-  // Brillo esférico por encima de todo
-  const grad = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, 1, x - r * 0.35, y - r * 0.4, r * 0.9);
-  grad.addColorStop(0, "rgba(255,255,255,0.6)");
+  // Reflejo suave
+  const grad = ctx.createRadialGradient(x - r * 0.3, y - r * 0.4, 1, x - r * 0.3, y - r * 0.4, r * 0.9);
+  grad.addColorStop(0, "rgba(255,255,255,0.35)");
   grad.addColorStop(1, "rgba(255,255,255,0)");
   ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fillStyle = grad; ctx.fill();
 }
@@ -254,7 +272,7 @@ function drawPlayerCard(ctx, rect, p, opts) {
   const tray = { x: x + pad, y: trayTop, w: w - 2 * pad, h: y + h - pad - trayTop };
   roundRect(ctx, tray.x, tray.y, tray.w, tray.h, 10); ctx.fillStyle = rgb(darken(COLOR.creamDim, 0.12)); ctx.fill();
   if (p.balls && p.balls.length) {
-    let radius = p.balls.length <= 12 ? 18 : 15;
+    let radius = p.balls.length <= 4 ? 30 : p.balls.length <= 8 ? 24 : p.balls.length <= 12 ? 19 : 15;
     while (radius > 9 && ballRowHeight(p.balls.length, radius, tray.w - 8) > tray.h - 10) radius--;
     drawBallRow(ctx, p.balls, tray.x + tray.w / 2, tray.y + 6, tray.w - 8, radius);
   }
@@ -628,6 +646,7 @@ function backToForm(message) {
   state.stage = "FORM";
   state.snapshot = null;
   state.myId = null;
+  if (window.Mesa3D) Mesa3D.reset();
   syncMusicMode();
   state.waitingReply = false;
   state.leaveArmedUntil = 0;
@@ -646,6 +665,9 @@ function onServerMessage(msg) {
     state.myId = msg.id;
     state.stage = "ONLINE";
     showScreen("table");
+    let saved = null;
+    try { saved = localStorage.getItem("siglo-vista"); } catch (e) { /* sin almacenamiento */ }
+    if (saved === "3d" && !state.view3d) setView3d(true);
   } else if (msg.type === "state") {
     showStatusAnimation(msg.last_action);
     state.snapshot = msg;
@@ -842,9 +864,36 @@ function resizeCanvas(neededWidth, neededHeight) {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
+// ------------------------------------------------------------ vista 2D / 3D
+
+state.view3d = false;
+function setView3d(on) {
+  if (on && !(window.Mesa3D && Mesa3D.available() && Mesa3D.init(el("three-wrap")))) {
+    notify("Tu navegador no puede mostrar la vista 3D.");
+    on = false;
+  }
+  state.view3d = on;
+  state.built3d = null;
+  try { localStorage.setItem("siglo-vista", on ? "3d" : "2d"); } catch (e) { /* sin almacenamiento */ }
+  el("three-wrap").classList.toggle("hidden", !on);
+  el("canvas-wrap").classList.toggle("hidden", on);
+  el("btn-view").textContent = on ? "VISTA 2D" : "VISTA 3D";
+  document.body.classList.toggle("view3d", on);
+  if (on) { Mesa3D.start(); Mesa3D.resize(); } else if (window.Mesa3D) Mesa3D.stop();
+  if (state.snapshot) render();
+}
+el("btn-view").addEventListener("click", () => setView3d(!state.view3d));
+if (window.Mesa3D) Mesa3D.setAvatarColor((name) => rgb(AVATAR_COLORS[hashName(name) % AVATAR_COLORS.length]));
+window.addEventListener("resize", () => { if (state.view3d) Mesa3D.resize(); });
+
 function render() {
   if (state.stage !== "ONLINE" || !state.snapshot) return;
   const snap = state.snapshot;
+  if (state.view3d) {
+    if (state.built3d !== snap) { Mesa3D.update(snap, state.myId); state.built3d = snap; }
+    renderChrome();
+    return;
+  }
   const wrap = el("canvas-wrap");
   // getBoundingClientRect incluye las barras de scroll, así que el tamaño medido no
   // cambia según aparezcan o no (clientWidth/Height sí, y eso causaba un bucle).
@@ -893,7 +942,7 @@ function renderOpponentPanel(snap) {
     : null;
   const player = requestedPlayer || turnPlayer || actionPlayer || opponents[0];
 
-  let activity = "Esperando la partida";
+  let activity = snap.phase === PHASE_PLAYING ? "Esperando su turno" : "Esperando la partida";
   let isActive = false;
   if (requestedPlayer && requestedPlayer.id === player.id) {
     activity = "Pide una bola";
@@ -1084,4 +1133,4 @@ apiRequest("/api/me")
 
 // Punto de apoyo para depurar desde la consola del navegador (no afecta el
 // juego). window.__siglo.state.snapshot trae la última foto de la mesa.
-window.__siglo = { state, isHost, isMyTurn, canStart, hostDeals, canDeal, findPlayer, buildWsUrl, render };
+window.__siglo = { state, setView3d, isHost, isMyTurn, canStart, hostDeals, canDeal, findPlayer, buildWsUrl, render };

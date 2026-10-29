@@ -21,6 +21,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "siglo_game"))
 
+from src.database import AccountDatabase  # noqa: E402
 from src.match import Match          # noqa: E402
 from src.protocol import DEFAULT_PORT, TURN_TIMEOUT  # noqa: E402
 from src.server import SigloServer   # noqa: E402
@@ -39,8 +40,28 @@ def local_ip():
         return None
 
 
+def build_database():
+    """PostgreSQL si hay DATABASE_URL (recomendado en un hosting); si no, SQLite en un archivo."""
+    dsn = os.environ.get("DATABASE_URL", "").strip()
+    if not dsn:
+        db = AccountDatabase()
+        print(f"Cuentas: SQLite en {db.path}  (en un hosting con disco efímero usa DATABASE_URL con PostgreSQL)")
+        return db
+    if dsn.startswith("postgres://"):  # Render/Heroku usan este esquema; psycopg2 acepta ambos
+        dsn = "postgresql://" + dsn[len("postgres://"):]
+    from src.database_postgres import PostgresAccountDatabase  # import perezoso: solo si hace falta
+    try:
+        db = PostgresAccountDatabase(dsn)
+    except Exception as err:
+        print(f"No se pudo conectar a la base de datos: {err}")
+        sys.exit(1)
+    print("Cuentas: base de datos PostgreSQL conectada.")
+    return db
+
+
 async def run(args):
     server = SigloServer(args.host, args.puerto, Match(turn_seconds=args.tiempo_turno))
+    server.database = build_database()
     runner = None
 
     if not args.sin_tcp:
@@ -81,6 +102,7 @@ async def run(args):
     finally:
         if runner is not None:
             await runner.cleanup()
+        server.database.close()
 
 
 def main():

@@ -398,3 +398,13 @@ async def test_tcp_and_websocket_share_the_same_table(client):
     assert set(state_tcp["winner_ids"]) <= {ana_id, luis_id}
 
     writer.close()
+
+
+async def test_serves_3d_view_assets(client):
+    """La vista 3D del navegador necesita estos archivos estáticos."""
+    for path in ("/mesa3d.js", "/vendor/three.min.js"):
+        resp = await client.get(path)
+        assert resp.status == 200, path
+        assert len(await resp.read()) > 1000
+    html = await (await client.get("/")).text()
+    assert "btn-view" in html and "mesa3d.js" in html

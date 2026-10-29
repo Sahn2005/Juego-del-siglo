@@ -21,7 +21,7 @@ import logging
 import uuid
 from typing import Dict, Optional, Protocol
 
-from src.database import AccountDatabase
+from src.database import AccountDatabase, AccountError
 from src.match import Match, MatchError
 from src.protocol import (
     DEFAULT_PORT, PHASE_LOBBY, PHASE_PLAYING, PHASE_ROUND_END, decode, encode,
@@ -203,22 +203,45 @@ class SigloServer:
     # Compartido por los dos transportes
     # ------------------------------------------------------------------
     def _join(self, conn: Connection, first: Optional[dict], account=None) -> int:
-        if first is None or first.get("type") != "join":
-            raise ValueError("se esperaba 'join'")
+        """Primer mensaje de cada conexión.
+
+        'join'            invitado (o cuenta ya validada por la cookie web, vía `account`)
+        'login'/'register' cuenta creada o validada aquí mismo (clientes de escritorio y 3D)
+        """
+        kind = first.get("type") if first else None
+        if kind not in ("join", "login", "register"):
+            raise ValueError("se esperaba 'join', 'login' o 'register'")
         try:
+            if kind in ("login", "register"):
+                if self.database is None:
+                    raise AccountError("Las cuentas no están disponibles en este servidor.")
+                action = self.database.register if kind == "register" else self.database.authenticate
+                account = action(str(first.get("username", "")), str(first.get("password", "")))
+            if account and any(
+                uid == account["id"] and self._is_connected(sid)
+                for sid, uid in self._seat_users.items()
+            ):
+                raise AccountError("Esa cuenta ya está en esta mesa.")
             name = account["username"] if account else first.get("name")
             seat_id = self.match.join(name)
-        except MatchError as err:
+        except (MatchError, AccountError) as err:
             conn.send({"type": "error", "message": str(err)})
             raise ValueError(str(err))  # el finally de quien llama limpia la conexión
 
         self._connections[seat_id] = conn
+        welcome = {"type": "welcome", "id": seat_id}
         if account:
             self._seat_users[seat_id] = account["id"]
+            if self.database is not None:
+                welcome["account"] = True
+                welcome["stats"] = self.database.get_stats(account["id"])
         log.info("Jugador %s (%s) se unió", seat_id, self._player_name(seat_id))
-        conn.send({"type": "welcome", "id": seat_id})
+        conn.send(welcome)
         self._changed()
         return seat_id
+
+    def _is_connected(self, seat_id: int) -> bool:
+        return seat_id in self._connections
 
     async def _finish(self, conn: Connection, seat_id: Optional[int]) -> None:
         """Cierra una conexión de forma prolija: primero saca al jugador de la
@@ -300,6 +323,10 @@ class SigloServer:
                 self._match_id, match.round_number, participants, match.winner_ids
             )
         self._recorded_round = match.round_number
+        if self.database is not None:   # estadísticas nuevas para cada cuenta sentada
+            for seat_id, user_id in self._seat_users.items():
+                if seat_id in self._connections:
+                    self._send_to(seat_id, {"type": "stats", **self.database.get_stats(user_id)})
         connected_ids = {seat.id for seat in match.seats if seat.connected}
         self._seat_users = {
             seat_id: user_id

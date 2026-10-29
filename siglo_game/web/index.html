@@ -89,12 +89,16 @@
         <h1 class="title title-small">SIGLO</h1>
         <p id="table-subtitle" class="table-subtitle"></p>
       </div>
-      <div id="table-corner" class="table-corner"></div>
+      <div class="table-corner-box">
+        <div id="table-corner" class="table-corner"></div>
+        <button id="btn-view" class="btn btn-secondary btn-small" type="button" title="Cambiar entre vista 2D y 3D">VISTA 3D</button>
+      </div>
     </header>
 
     <div id="canvas-wrap" class="canvas-wrap">
       <canvas id="table-canvas"></canvas>
     </div>
+    <div id="three-wrap" class="three-wrap hidden"></div>
 
     <div id="status-line" class="status-line"></div>
     <div id="last-action-line" class="last-action-line" aria-live="polite"></div>
@@ -130,6 +134,8 @@
     </div>
   </div>
 
+<script src="vendor/three.min.js"></script>
+<script src="mesa3d.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

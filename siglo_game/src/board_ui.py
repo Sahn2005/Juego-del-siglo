@@ -127,39 +127,66 @@ def draw_table_header(surface, ui, title, subtitle=None, corner_text=None, y=44)
 
 # ---------------------------------------------------------------- fichas
 
-def draw_ball(surface, font, value, center, radius=20, vira=False):
-    """Una ficha numerada con volumen, como una balota de lotería.
+WOOD_FACE = (238, 214, 168)       # cara de madera clara
+WOOD_EDGE = (196, 160, 106)       # canto del disco
+WOOD_EDGE_DARK = (150, 114, 66)
+CHIP_RED = (200, 50, 38)          # rojo de la lotería
+_chip_fonts = {}
+
+
+def _chip_font(size):
+    """Fuente con serifa y negrita, parecida a los números de las fichas de lotería."""
+    size = max(8, int(size))
+    if size not in _chip_fonts:
+        _chip_fonts[size] = pygame.font.SysFont("georgia,timesnewroman,dejavuserif,serif", size, bold=True)
+    return _chip_fonts[size]
+
+
+def draw_ball(surface, font, value, center, radius=20, vira=False, blank=False):
+    """Una ficha de lotería: disco de madera con aro rojo y el número en rojo.
 
     vira=True le pone un anillo dorado (la primera ficha que recibe cada
     jugador, la que define el punto de partida de la ronda).
+    blank=True la dibuja boca abajo (solo madera), para las fichas ocultas.
     """
     x, y = center
     r = radius
-    base = decile_color(value)
+    t = max(3, int(r * 0.24))           # grosor del disco
 
     if vira:
-        pygame.draw.circle(surface, GOLD, (x, y), r + 4)
-        pygame.draw.circle(surface, darken(GOLD, 0.3), (x, y), r + 4, 1)
+        pygame.draw.circle(surface, GOLD, (x, y + t // 2), r + 4)
+        pygame.draw.circle(surface, darken(GOLD, 0.3), (x, y + t // 2), r + 4, 1)
 
-    # Sombra proyectada.
-    shadow = pygame.Surface((r * 2 + 8, r * 2 + 8), pygame.SRCALPHA)
-    pygame.draw.circle(shadow, (0, 0, 0, 80), (r + 4, r + 6), r)
-    surface.blit(shadow, (x - r - 4, y - r - 4))
+    # Sombra proyectada sobre el paño.
+    shadow = pygame.Surface((r * 2 + 12, r * 2 + 14), pygame.SRCALPHA)
+    pygame.draw.ellipse(shadow, (0, 0, 0, 90), (4, t + 8, r * 2 + 4, r * 2 - 2))
+    surface.blit(shadow, (x - r - 6, y - r - 4))
 
-    pygame.draw.circle(surface, base, (x, y), r)
-    pygame.draw.circle(surface, darken(base, 0.45), (x, y), r, max(1, r // 10))
+    # Canto: dos discos unidos por un rectángulo (el grosor de la madera).
+    pygame.draw.circle(surface, WOOD_EDGE_DARK, (x, y + t), r)
+    pygame.draw.rect(surface, WOOD_EDGE, (x - r, y, r * 2, t))
+    pygame.draw.circle(surface, WOOD_EDGE_DARK, (x, y + t), r, 1)
+    pygame.draw.line(surface, WOOD_EDGE_DARK, (x - r, y), (x - r, y + t))
+    pygame.draw.line(surface, WOOD_EDGE_DARK, (x + r, y), (x + r, y + t))
 
-    # Brillo: una elipse blanca translúcida arriba a la izquierda.
-    gloss = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
-    gloss_rect = pygame.Rect(0, 0, int(r * 1.15), int(r * 0.8))
-    gloss_rect.center = (int(r * 0.72), int(r * 0.62))
-    pygame.draw.ellipse(gloss, (255, 255, 255, 95), gloss_rect)
-    surface.blit(gloss, (x - r, y - r))
+    # Cara superior.
+    pygame.draw.circle(surface, WOOD_FACE, (x, y), r)
+    if blank:
+        pygame.draw.circle(surface, WOOD_EDGE, (x, y), r, 1)
+        pygame.draw.circle(surface, darken(WOOD_FACE, 0.06), (x, y), int(r * 0.7), 1)
+        return
 
-    text_color = CREAM if _luminance(base) < 150 else INK
-    label = str(value)
-    surf = font.render(label, True, text_color)
+    pygame.draw.circle(surface, CHIP_RED, (x, y), r)                       # aro rojo
+    pygame.draw.circle(surface, WOOD_FACE, (x, y), max(2, int(r * 0.76)))  # centro claro
+    pygame.draw.circle(surface, darken(CHIP_RED, 0.25), (x, y), r, 1)
+
+    surf = _chip_font(r * (0.95 if value < 100 else 0.8)).render(str(value), True, CHIP_RED)
     surface.blit(surf, surf.get_rect(center=(x, y)))
+
+    # Reflejo suave de la madera.
+    gloss = pygame.Surface((r * 2, r * 2), pygame.SRCALPHA)
+    pygame.draw.ellipse(gloss, (255, 255, 255, 55), (int(r * 0.25), int(r * 0.1), int(r * 1.0), int(r * 0.55)))
+    surface.blit(gloss, (x - r, y - r))
 
 
 def draw_ball_row(surface, font, values, center_x, top_y, max_width,

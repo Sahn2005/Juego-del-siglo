@@ -11,6 +11,7 @@ import pygame
 import pytest
 
 from helpers import fixed_deck
+from src.database import AccountDatabase
 from src.game import Game
 from src.match import Match
 from src.online import OnlineGame
@@ -33,6 +34,7 @@ class ServerThread:
     def __init__(self, *deck_values):
         self.loop = asyncio.new_event_loop()
         self.server = SigloServer("127.0.0.1", 0, Match(deck_factory=fixed_deck(*deck_values)))
+        self.server.database = AccountDatabase(":memory:")
         ready = threading.Event()
 
         def run():
@@ -280,3 +282,40 @@ def test_main_menu_single_player_still_works(monkeypatch):
     game.handle_events([pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=pos)])
     assert len(game.players) == 3 and game.players[0].name == "Jugador 1"
     game.update(); game.render()
+
+
+def test_register_login_and_stats_in_pygame_client(server, monkeypatch):
+    from src.online import MODE_LOGIN, MODE_REGISTER
+
+    p = Player()
+    p.draw()
+    # pestaña "registrarme" -> aparece la contraseña
+    p.game._set_mode(MODE_REGISTER)
+    p.draw()
+    p.game.input_addr.text = f"127.0.0.1:{server.port}"
+    p.game.input_name.text = "Ana"
+    p.game.handle_events([pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN, unicode="\r")])
+    assert "contraseña" in p.game.form_message  # falta la contraseña
+    p.game.input_pass.text = "secreto123"
+    p.click(p.game.btn_connect, monkeypatch)
+    p.until(lambda: p.game.phase is not None)
+    assert p.game.stats == {"games_played": 0, "games_won": 0}
+    p.draw()
+    p.game.close()
+
+    # usuario repetido -> vuelve al formulario con el error
+    q = Player()
+    q.game._set_mode(MODE_REGISTER)
+    q.game.input_addr.text = f"127.0.0.1:{server.port}"
+    q.game.input_name.text = "ana"
+    q.game.input_pass.text = "secreto123"
+    q.click(q.game.btn_connect, monkeypatch)
+    q.until(lambda: q.game.stage == "FORM" and q.game.form_message)
+    assert "ya está registrado" in q.game.form_message
+    # y con la contraseña mala no entra
+    q.game._set_mode(MODE_LOGIN)
+    q.game.input_pass.text = "mala"
+    q.click(q.game.btn_connect, monkeypatch)
+    q.until(lambda: q.game.stage == "FORM" and "incorrectos" in q.game.form_message)
+    q.draw()
+    q.game.close()

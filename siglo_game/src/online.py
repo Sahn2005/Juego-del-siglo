@@ -30,15 +30,22 @@ LEAVE_CONFIRM_SECONDS = 3.0
 NOTICE_SECONDS = 3.0
 
 
+MODE_GUEST = "GUEST"        # entrar sin cuenta (no se guardan estadísticas)
+MODE_LOGIN = "LOGIN"        # entrar con una cuenta existente
+MODE_REGISTER = "REGISTER"  # crear una cuenta nueva
+MODE_LABELS = [(MODE_GUEST, "INVITADO"), (MODE_LOGIN, "INICIAR SESIÓN"), (MODE_REGISTER, "REGISTRARME")]
+
+
 class TextInput:
     """Campo de texto de una línea."""
 
-    def __init__(self, x, y, width, height, placeholder="", max_len=40):
+    def __init__(self, x, y, width, height, placeholder="", max_len=40, secret=False):
         self.rect = pygame.Rect(x, y, width, height)
         self.text = ""
         self.placeholder = placeholder
         self.max_len = max_len
         self.active = False
+        self.secret = secret  # True: se dibujan asteriscos (contraseñas)
 
     def handle_event(self, event):
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -57,7 +64,8 @@ class TextInput:
 
         if self.text or self.active:
             caret = "|" if self.active and (pygame.time.get_ticks() // 500) % 2 == 0 else ""
-            surf = font.render(self.text + caret, True, TEXT_COLOR)
+            shown = "*" * len(self.text) if self.secret else self.text
+            surf = font.render(shown + caret, True, TEXT_COLOR)
         else:
             surf = font.render(self.placeholder, True, GRAY)
 
@@ -95,9 +103,19 @@ class OnlineGame:
         font, small = ui.font, ui.small_font
         self.input_addr = TextInput(cx - 220, 255, 440, 46, "127.0.0.1  (vacío = este equipo)", 40)
         self.input_name = TextInput(cx - 220, 355, 440, 46, "Jugador", MAX_NAME_LEN)
+        self.input_pass = TextInput(cx - 220, 455, 440, 46, "Contraseña", 40, secret=True)
         self.input_addr.active = True
 
+        self.mode = MODE_GUEST
+        self.stats: Optional[dict] = None   # {"games_played", "games_won"} si hay cuenta
+        tab_w = 200
+        self._mode_tabs = []
+        for i, (mode, label) in enumerate(MODE_LABELS):
+            rect = pygame.Rect(cx - 330 + i * (tab_w + 30), 172, tab_w, 36)
+            self._mode_tabs.append((mode, label, rect))
+
         self.btn_connect = Button(cx - 110, 430, 220, 50, "CONECTAR", font, PRIMARY_COLOR, SECONDARY_COLOR)
+        self._layout_form()
         self.btn_back = Button(20, 20, 100, 40, "VOLVER", small, PRIMARY_COLOR, SECONDARY_COLOR)
         self.btn_leave = Button(20, 20, 130, 40, "SALIR", small, RED, SECONDARY_COLOR)
         self.btn_start = Button(cx - 170, 520, 340, 50, "INICIAR PARTIDA", font, PRIMARY_COLOR, SECONDARY_COLOR)
@@ -119,6 +137,17 @@ class OnlineGame:
             self.net = None
         pygame.key.set_repeat()
 
+    def _set_mode(self, mode):
+        self.mode = mode
+        self.form_message = ""
+        self._layout_form()
+
+    def _layout_form(self):
+        """En modo invitado el formulario es corto; con cuenta aparece la contraseña."""
+        self.btn_connect.rect.y = 430 if self.mode == MODE_GUEST else 525
+        self.btn_connect.text = {MODE_GUEST: "CONECTAR", MODE_LOGIN: "ENTRAR",
+                                 MODE_REGISTER: "CREAR CUENTA"}[self.mode]
+
     def _back_to_form(self, message=""):
         if self.net is not None:
             self.net.close()
@@ -126,6 +155,7 @@ class OnlineGame:
         self.stage = STAGE_FORM
         self.snapshot = None
         self.my_id = None
+        self.stats = None
         self.waiting_reply = False
         self.leave_armed_until = 0.0
         self.form_message = message
@@ -137,11 +167,19 @@ class OnlineGame:
             self.form_message = str(err)
             return
         name = self.input_name.text.strip() or "Jugador"
+        auth = None
+        if self.mode != MODE_GUEST:
+            username, password = self.input_name.text.strip(), self.input_pass.text
+            if not username or not password:
+                self.form_message = "Escribe tu usuario y tu contraseña."
+                return
+            auth = {"type": "login" if self.mode == MODE_LOGIN else "register",
+                    "username": username, "password": password}
 
         self.target = f"{host}:{port}"
         self.form_message = ""
         self.net = NetworkClient()
-        self.net.connect(host, port, name)
+        self.net.connect(host, port, name, auth)
         self.stage = STAGE_CONNECTING
 
     # ------------------------------------------------------------------
@@ -226,14 +264,23 @@ class OnlineGame:
                 self._events_online(event)
 
     def _events_form(self, event):
-        self.input_addr.handle_event(event)
-        self.input_name.handle_event(event)
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            for mode, _, rect in self._mode_tabs:
+                if rect.collidepoint(event.pos):
+                    self._set_mode(mode)
+                    return
+        fields = [self.input_addr, self.input_name]
+        if self.mode != MODE_GUEST:
+            fields.append(self.input_pass)
+        for field in fields:
+            field.handle_event(event)
 
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_TAB:
-                to_name = self.input_addr.active
-                self.input_addr.active = not to_name
-                self.input_name.active = to_name
+                current = next((i for i, f in enumerate(fields) if f.active), -1)
+                for f in fields:
+                    f.active = False
+                fields[(current + 1) % len(fields)].active = True
             elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
                 self._connect()
                 return
@@ -295,7 +342,11 @@ class OnlineGame:
         kind = message.get("type")
         if kind == "welcome":
             self.my_id = message.get("id")
+            self.stats = message.get("stats")
             self.stage = STAGE_ONLINE
+        elif kind == "stats":
+            self.stats = {"games_played": message.get("games_played", 0),
+                          "games_won": message.get("games_won", 0)}
         elif kind == "state":
             self._show_status_animation(message.get("last_action"))
             self.snapshot = message
@@ -363,17 +414,29 @@ class OnlineGame:
     def _draw_form(self):
         ui, cx = self.ui, WINDOW_WIDTH // 2
         ui.draw_text("SIGLO", ui.title_font, TEXT_COLOR, cx, 90, center=True)
-        ui.draw_text("Multijugador", ui.font, TEXT_COLOR, cx, 150, center=True)
+        ui.draw_text("Multijugador", ui.font, TEXT_COLOR, cx, 140, center=True)
+
+        for mode, label, rect in self._mode_tabs:
+            selected = mode == self.mode
+            pygame.draw.rect(self.screen, PRIMARY_COLOR if selected else WHITE, rect, border_radius=8)
+            pygame.draw.rect(self.screen, PRIMARY_COLOR if selected else GRAY, rect, 2, border_radius=8)
+            surf = ui.small_font.render(label, True, WHITE if selected else TEXT_COLOR)
+            self.screen.blit(surf, surf.get_rect(center=rect.center))
 
         ui.draw_text("Servidor (IP o IP:puerto)", ui.small_font, TEXT_COLOR, cx - 220, 222)
         self.input_addr.draw(self.screen, ui.font)
-        ui.draw_text("Tu nombre", ui.small_font, TEXT_COLOR, cx - 220, 322)
+        ui.draw_text("Tu nombre" if self.mode == MODE_GUEST else "Usuario",
+                     ui.small_font, TEXT_COLOR, cx - 220, 322)
         self.input_name.draw(self.screen, ui.font)
+        if self.mode != MODE_GUEST:
+            ui.draw_text("Contraseña", ui.small_font, TEXT_COLOR, cx - 220, 422)
+            self.input_pass.draw(self.screen, ui.font)
 
         self.btn_connect.draw(self.screen)
         self.btn_back.draw(self.screen)
         if self.form_message:
-            ui.draw_text(self.form_message, ui.small_font, RED, cx, 510, center=True)
+            y = 510 if self.mode == MODE_GUEST else 600
+            ui.draw_text(self.form_message, ui.small_font, RED, cx, y, center=True)
         ui.draw_text("Tab: cambiar de campo   ·   Enter: conectar",
                      ui.small_font, GRAY, cx, 720, center=True)
 
@@ -407,6 +470,7 @@ class OnlineGame:
 
         self.btn_leave.text = "SALIR"
         self.btn_leave.draw(self.screen)
+        self._draw_stats(690)
         if self._is_host():
             enough = self._can_start()
             self._draw_button(self.btn_start, enough and not self.waiting_reply)
@@ -438,6 +502,16 @@ class OnlineGame:
         armed = time.monotonic() < self.leave_armed_until
         self.btn_leave.text = "¿SEGURO?" if armed else "SALIR"
         self.btn_leave.draw(self.screen)
+        self._draw_stats(742)
+
+    def _draw_stats(self, y):
+        """Partidas jugadas/ganadas de la cuenta (nada si se juega de invitado)."""
+        if not self.stats:
+            return
+        text = (f"Tu cuenta  ·  Partidas: {self.stats.get('games_played', 0)}"
+                f"  ·  Ganadas: {self.stats.get('games_won', 0)}")
+        self.ui.draw_text(text, self.ui.small_font, board_ui.CREAM_TEXT_DIM,
+                          WINDOW_WIDTH // 2, y, center=True)
 
     def _draw_status_animation(self):
         animation = self._status_animation
