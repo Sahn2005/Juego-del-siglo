@@ -123,7 +123,10 @@ def build_app(server: SigloServer) -> web.Application:
         # Para que el proveedor de hosting (o vos) pueda comprobar que
         # sigue vivo sin tener que abrir un WebSocket.
         m = server.match
-        return web.json_response({"ok": True, "jugadores": len(m.seats), "fase": m.phase})
+        db = getattr(server, "database", None)
+        backend = "postgresql" if db.__class__.__name__.startswith("Postgres") else "sqlite"
+        return web.json_response({"ok": True, "jugadores": len(m.seats), "fase": m.phase,
+                                  "cuentas": backend, "cuentas_persistentes": backend == "postgresql"})
 
     async def index(request: web.Request) -> web.FileResponse:
         return web.FileResponse(WEB_DIR / "index.html")

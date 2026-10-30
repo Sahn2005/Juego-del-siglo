@@ -170,7 +170,7 @@
     const elev = (portrait ? 64 : 50) * Math.PI / 180;
     const halfW = portrait ? 7.3 : 12.2, halfD = portrait ? 14.6 : 7.8;
     // el fondo se ve acortado por la inclinación: se compensa con sin(elev)
-    const dist = Math.max(halfW / Math.tan(hf / 2), (halfD * Math.sin(elev) + 0.7) / Math.tan(vf / 2)) * (portrait ? 1.04 : 1.14);
+    const dist = Math.max(halfW / Math.tan(hf / 2), (halfD * Math.sin(elev) + 0.7) / Math.tan(vf / 2)) * (portrait ? 1.12 : 1.14);
     const tz = portrait ? -0.8 : 1.2;   // en horizontal se mira un poco más cerca para que no se corte el borde de abajo
     camera.position.set(0, dist * Math.sin(elev), tz + dist * Math.cos(elev));
     camera.lookAt(0, 0, tz);

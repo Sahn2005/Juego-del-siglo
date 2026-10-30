@@ -138,7 +138,9 @@ async def test_health_endpoint(client):
     resp = await client.get("/health")
     assert resp.status == 200
     body = await resp.json()
-    assert body == {"ok": True, "jugadores": 0, "fase": PHASE_LOBBY}
+    assert body["ok"] is True and body["jugadores"] == 0 and body["fase"] == PHASE_LOBBY
+    assert body["cuentas"] in ("sqlite", "postgresql")
+    assert body["cuentas_persistentes"] == (body["cuentas"] == "postgresql")
 
 
 async def test_register_login_and_logout(client):

@@ -1,0 +1,19 @@
+# Blueprint de Render: crea el servicio web y una base PostgreSQL ya conectada.
+# Render > New > Blueprint > elige este repositorio.
+services:
+  - type: web
+    name: juego-del-siglo
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: siglo-db
+          property: connectionString
+
+databases:
+  - name: siglo-db
+    plan: free
+    databaseName: siglo
+    user: siglo

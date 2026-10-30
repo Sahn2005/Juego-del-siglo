@@ -77,12 +77,6 @@
   <!-- Mesa (lobby / jugando / fin de ronda) -->
   <section id="screen-table" class="screen screen-table hidden">
     <div id="status-animation" class="status-animation" aria-live="polite" aria-atomic="true"></div>
-    <aside id="opponent-panel" class="opponent-panel hidden" aria-live="polite" aria-atomic="true">
-      <span class="opponent-panel-label">OPONENTE</span>
-      <div id="opponent-avatar" class="opponent-avatar" aria-hidden="true"></div>
-      <strong id="opponent-name" class="opponent-name"></strong>
-      <span id="opponent-activity" class="opponent-activity"></span>
-    </aside>
     <header class="table-header">
       <button id="btn-leave" class="btn btn-danger btn-small" type="button">SALIR</button>
       <div class="table-header-center">
@@ -94,6 +88,7 @@
         <button id="btn-view" class="btn btn-secondary btn-small" type="button" title="Cambiar entre vista 2D y 3D">VISTA 3D</button>
       </div>
     </header>
+    <aside id="opponent-panel" class="opponent-panel hidden" aria-live="polite" aria-label="Oponentes"></aside>
 
     <div id="canvas-wrap" class="canvas-wrap">
       <canvas id="table-canvas"></canvas>

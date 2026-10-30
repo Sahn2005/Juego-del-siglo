@@ -853,14 +853,15 @@ el("btn-close-modal").addEventListener("click", () => { el("results-modal").clas
 
 // ============================================================ dibujo de la pantalla completa
 
-function resizeCanvas(neededWidth, neededHeight) {
+function resizeCanvas(neededWidth, neededHeight, fit = 1) {
   const dpr = window.devicePixelRatio || 1;
   const w = Math.round(neededWidth * dpr), h = Math.round(neededHeight * dpr);
   // Asignar width/height reasigna el bitmap entero: solo se hace si cambió.
   if (canvas.width !== w) canvas.width = w;
   if (canvas.height !== h) canvas.height = h;
-  canvas.style.width = neededWidth + "px";
-  canvas.style.height = neededHeight + "px";
+  // fit < 1: pantalla muy baja (celular en horizontal): se dibuja igual pero se muestra reducido.
+  canvas.style.width = Math.floor(neededWidth * fit) + "px";
+  canvas.style.height = Math.floor(neededHeight * fit) + "px";
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
@@ -906,7 +907,8 @@ function render() {
   if (visiblePlayers.length * (CARD_W + CARD_GAP) + CARD_GAP > wrapWidth) wrapHeight -= SCROLLBAR_RESERVE;
 
   const { rects, totalW, totalH } = layoutCards(visiblePlayers.length, wrapWidth, wrapHeight);
-  resizeCanvas(totalW, totalH);
+  const fit = Math.max(0.4, Math.min(1, (wrapHeight - 2) / totalH));
+  resizeCanvas(totalW, totalH, fit);
   ctx.clearRect(0, 0, totalW, totalH);
 
   const winnerIds = new Set(snap.winner_ids || []);
@@ -921,53 +923,54 @@ function render() {
   renderChrome();
 }
 
+function opponentActivity(snap, player) {
+  const lastAction = snap.last_action;
+  if (snap.draw_request && snap.draw_request.player_id === player.id) return { text: "Pide una bola", active: true };
+  if (snap.phase === PHASE_PLAYING && snap.turn_id === player.id) return { text: "Está jugando", active: true };
+  if (lastAction && lastAction.name === player.name) {
+    const labels = { ME_QUEDO: "Se quedó", ME_FUI: "Se pasó", SIGLO: "¡SIGLO!" };
+    return { text: labels[lastAction.status] || "Jugó", active: false };
+  }
+  if (snap.phase === PHASE_ROUND_END) return { text: "Ronda terminada", active: false };
+  return { text: snap.phase === PHASE_PLAYING ? "Esperando su turno" : "Esperando la partida", active: false };
+}
+
+// Un recuadro por cada oponente conectado (con 2 jugadores hay uno; con 3 o más, varios).
 function renderOpponentPanel(snap) {
   const panel = el("opponent-panel");
   const opponents = snap.players.filter((player) =>
     player.id !== state.myId && player.connected !== false);
   if (!opponents.length) {
     panel.classList.add("hidden");
+    panel.textContent = "";
     return;
   }
+  panel.classList.toggle("multi", opponents.length > 1);
+  panel.dataset.count = String(opponents.length);
 
-  const lastAction = snap.last_action;
-  const actionPlayer = lastAction
-    ? opponents.find((player) => player.name === lastAction.name)
-    : null;
-  const requestedPlayer = snap.draw_request
-    ? opponents.find((player) => player.id === snap.draw_request.player_id)
-    : null;
-  const turnPlayer = snap.phase === PHASE_PLAYING && snap.turn_id !== state.myId
-    ? opponents.find((player) => player.id === snap.turn_id)
-    : null;
-  const player = requestedPlayer || turnPlayer || actionPlayer || opponents[0];
-
-  let activity = snap.phase === PHASE_PLAYING ? "Esperando su turno" : "Esperando la partida";
-  let isActive = false;
-  if (requestedPlayer && requestedPlayer.id === player.id) {
-    activity = "Pide una bola";
-    isActive = true;
-  } else if (turnPlayer && turnPlayer.id === player.id) {
-    activity = "Está jugando";
-    isActive = true;
-  } else if (actionPlayer && actionPlayer.id === player.id) {
-    const labels = { ME_QUEDO: "Se quedó", ME_FUI: "Se pasó", SIGLO: "¡SIGLO!" };
-    activity = labels[lastAction.status] || "Jugó";
-  } else if (snap.phase === PHASE_ROUND_END) {
-    activity = "Ronda terminada";
+  // Se reutilizan los recuadros existentes para no recrear el DOM en cada actualización.
+  while (panel.children.length > opponents.length) panel.lastChild.remove();
+  while (panel.children.length < opponents.length) {
+    const card = document.createElement("div");
+    card.className = "opponent-card";
+    card.innerHTML = '<span class="opponent-panel-label">OPONENTE</span>' +
+      '<div class="opponent-avatar" aria-hidden="true"></div>' +
+      '<strong class="opponent-name"></strong><span class="opponent-activity"></span>';
+    panel.appendChild(card);
   }
-
-  const color = AVATAR_COLORS[hashName(player.name) % AVATAR_COLORS.length];
-  const avatar = el("opponent-avatar");
-  const initials = player.name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("");
-  if (avatar.textContent !== initials) avatar.textContent = initials;
-  const background = rgb(color);
-  if (avatar.style.backgroundColor !== background) avatar.style.backgroundColor = background;
-  if (el("opponent-name").textContent !== player.name) el("opponent-name").textContent = player.name;
-  if (el("opponent-activity").textContent !== activity) {
-    el("opponent-activity").textContent = activity;
-  }
-  panel.classList.toggle("is-active", isActive);
+  opponents.forEach((player, i) => {
+    const card = panel.children[i];
+    const { text, active } = opponentActivity(snap, player);
+    const avatar = card.querySelector(".opponent-avatar");
+    const initials = player.name.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join("");
+    if (avatar.textContent !== initials) avatar.textContent = initials;
+    avatar.style.backgroundColor = rgb(AVATAR_COLORS[hashName(player.name) % AVATAR_COLORS.length]);
+    const name = card.querySelector(".opponent-name");
+    if (name.textContent !== player.name) name.textContent = player.name;
+    const act = card.querySelector(".opponent-activity");
+    if (act.textContent !== text) act.textContent = text;
+    card.classList.toggle("is-active", active);
+  });
   panel.classList.remove("hidden");
 }
 

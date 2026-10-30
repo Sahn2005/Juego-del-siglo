@@ -45,7 +45,13 @@ def build_database():
     dsn = os.environ.get("DATABASE_URL", "").strip()
     if not dsn:
         db = AccountDatabase()
-        print(f"Cuentas: SQLite en {db.path}  (en un hosting con disco efímero usa DATABASE_URL con PostgreSQL)")
+        print(f"Cuentas: SQLite en {db.path}")
+        if os.environ.get("RENDER") or os.environ.get("DYNO") or os.environ.get("RAILWAY_ENVIRONMENT"):
+            print("=" * 70)
+            print("AVISO: no hay DATABASE_URL. En este hosting el disco se borra al reiniciar o")
+            print("redesplegar, así que las cuentas registradas SE PERDERÁN. Crea una base")
+            print("PostgreSQL y pon su URL en la variable DATABASE_URL (ver README).")
+            print("=" * 70)
         return db
     if dsn.startswith("postgres://"):  # Render/Heroku usan este esquema; psycopg2 acepta ambos
         dsn = "postgresql://" + dsn[len("postgres://"):]

@@ -74,3 +74,25 @@ def test_passwords_not_stored_in_clear(db):
         with db._connect() as cur:
             cur.execute("SELECT * FROM acct_users")
             assert "secreto123" not in str(cur.fetchall())
+
+
+def test_accounts_survive_reopening_the_database(tmp_path, request):
+    """Las cuentas deben seguir ahí después de reiniciar el servidor (nueva conexión a la base)."""
+    first = AccountDatabase(str(tmp_path / "cuentas.db"))
+    first.register("persona1", "clave12345")
+    first.close()
+    second = AccountDatabase(str(tmp_path / "cuentas.db"))
+    assert second.authenticate("persona1", "clave12345")["username"] == "persona1"
+
+
+def test_postgres_recovers_from_dropped_connections():
+    """Si el hosting corta las conexiones inactivas, la siguiente consulta debe seguir funcionando."""
+    pg = _postgres()
+    if pg is None:
+        pytest.skip("PostgreSQL no disponible")
+    pg.register("cortes" + os.urandom(2).hex(), "clave12345")
+    with pg._connect() as cur:   # cierra a la fuerza todas las conexiones del pool
+        cur.execute("SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
+                    "WHERE datname = current_database() AND pid <> pg_backend_pid()")
+    with pytest.raises(AccountError):
+        pg.authenticate("noexiste", "clave12345")   # responde (no revienta por conexión cerrada)

@@ -39,3 +39,19 @@ El servidor web crea la base SQLite en `siglo_game/data/siglo.db`. Para usar otr
 - **Vista 3D en el navegador** (botón VISTA 3D / 2D) y cliente 3D de escritorio con Ursina (`pip install ursina`, `python cliente_3d.py`).
 - Login/registro también en el cliente de escritorio y 3D; con `DATABASE_URL` las cuentas van a PostgreSQL (si no, SQLite).
 - Con 3 o más jugadores, quien juega pide la bola (PEDIR BOLA) y el anfitrión la reparte.
+
+
+## Guardar las cuentas en Render (importante)
+
+En Render el disco del contenedor **se borra en cada reinicio o redespliegue**. Si el servidor corre sin
+`DATABASE_URL`, las cuentas se guardan en un archivo SQLite y se pierden. Para que se conserven:
+
+**Opción A (automática):** en Render elige *New → Blueprint* y apunta a este repositorio. El archivo
+`render.yaml` crea el servicio web y una base PostgreSQL (`siglo-db`) y ya los conecta.
+
+**Opción B (manual):** *New → PostgreSQL*, copia la *Internal Database URL*, y en el servicio web ve a
+*Environment* y crea la variable `DATABASE_URL` con ese valor. Redespliega.
+
+Las tablas se crean solas. Para comprobarlo abre `https://TU-APP.onrender.com/health`: debe decir
+`"cuentas": "postgresql"` y `"cuentas_persistentes": true`. Si dice `sqlite`, falta `DATABASE_URL`.
+(El plan gratis de PostgreSQL de Render caduca a los 30 días: pasado ese plazo hay que crear otra base o pasar a un plan de pago.)

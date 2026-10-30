@@ -231,18 +231,24 @@ input:focus { outline: none; border-color: var(--blue); }
   top: 50%;
   left: 14px;
   width: 126px;
-  padding: 13px 10px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transform: translateY(-50%);
+}
+.opponent-card {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
+  padding: 13px 10px 11px;
   border: 1px solid rgba(216, 178, 63, .75);
   border-radius: 14px;
   background: rgba(12, 54, 41, .94);
   box-shadow: 0 5px 18px rgba(0, 0, 0, .3);
   color: var(--cream-text);
   text-align: center;
-  transform: translateY(-50%);
+  flex: 0 0 auto;
 }
 .opponent-panel-label { color: var(--gold); font-size: 10px; font-weight: 800; letter-spacing: 1px; }
 .opponent-avatar {
@@ -265,7 +271,7 @@ input:focus { outline: none; border-color: var(--blue); }
   white-space: nowrap;
 }
 .opponent-activity { color: var(--cream-text-dim); font-size: 11px; line-height: 1.3; }
-.opponent-panel.is-active .opponent-activity { color: #ffe797; }
+.opponent-card.is-active .opponent-activity { color: #ffe797; }
 
 @keyframes status-reveal {
   0% { opacity: 0; transform: translate(-50%, -50%) scale(.55) rotate(-4deg); }
@@ -352,7 +358,8 @@ input:focus { outline: none; border-color: var(--blue); }
 @media (max-width: 420px) {
   .screen-table { border-width: 6px; }
   .action-bar .btn { max-width: none; }
-  .opponent-panel { left: 8px; width: 104px; padding: 9px 7px; }
+  .opponent-panel { left: 8px; width: 104px; }
+  .opponent-card { padding: 9px 7px; }
   .opponent-avatar { width: 38px; height: 38px; font-size: 18px; }
   .opponent-name { font-size: 12px; }
   .opponent-activity { font-size: 10px; }
@@ -426,10 +433,12 @@ input:focus { outline: none; border-color: var(--blue); }
 .three-wrap.hidden { display: none; }
 
 /* En 3D el panel de oponente sigue visible, pero en la esquina para no tapar la mesa. */
-.view3d .opponent-panel { top: 104px; left: 16px; transform: none; width: 112px; padding: 9px 8px 8px; }
+.view3d .opponent-panel { top: 104px; left: 16px; transform: none; width: 112px; }
+.view3d .opponent-card { padding: 9px 8px 8px; }
 .view3d .opponent-avatar { width: 38px; height: 38px; font-size: 18px; }
 @media (max-width: 520px) {
-  .view3d .opponent-panel { top: 96px; left: 8px; width: 92px; padding: 7px 6px; }
+  .view3d .opponent-panel { top: 96px; left: 8px; width: 92px; }
+  .view3d .opponent-card { padding: 7px 6px; }
 }
 
 /* Fichas decorativas del inicio: las mismas de lotería (madera, aro rojo, número rojo). */
@@ -472,4 +481,94 @@ body:not(.view3d) .action-bar .btn { font-size: 20px; padding: 16px 22px; max-wi
   .view3d .action-bar { padding: 6px 8px 2px; gap: 8px; }
   .view3d .action-bar .btn { min-height: 42px; font-size: 14px; padding: 8px 8px; }
   body:not(.view3d) .action-bar .btn { font-size: 17px; padding: 14px 10px; max-width: none; }
+}
+
+/* ------------------------------------------------ responsive: ajustes finos */
+/* Celulares muy angostos: la pantalla de inicio cabe sin scroll. */
+@media (max-width: 380px) {
+  .screen { padding-left: 14px; padding-right: 14px; }
+  .screen:not(.screen-table) .title { margin-top: 0; }
+}
+@media (max-height: 680px) and (max-width: 520px) {
+  .screen:not(.screen-table) { padding-top: calc(14px + var(--safe-top)); padding-bottom: calc(10px + var(--safe-bottom)); }
+  .screen:not(.screen-table) .title { font-size: 38px; margin: 0; }
+  .screen:not(.screen-table) .subtitle { margin: 0 0 6px; }
+}
+
+/* Celular en horizontal (pantalla baja): mesa en una sola pantalla, sin scroll. */
+@media (max-height: 520px) {
+  .screen:not(.screen-table) { padding-top: calc(12px + var(--safe-top)); padding-bottom: 12px; }
+  .screen-table { border-width: 5px; padding: 0 0 calc(4px + var(--safe-bottom)); overflow: hidden; }
+  .table-header { padding: 4px 10px 0; align-items: center; }
+  .table-header-center { display: flex; align-items: baseline; justify-content: center; gap: 10px; }
+  .title-small { font-size: 22px; }
+  .table-subtitle { font-size: 12px; min-height: 0; margin: 0; }
+  .canvas-wrap, .three-wrap { min-height: 0; border-radius: 10px; }
+  .status-line { min-height: 0; padding: 2px 10px 0; font-size: 14px; }
+  .status-line .timer { display: inline; margin-left: 8px; font-size: 12px; }
+  .last-action-line, .draw-request-line { min-height: 0; font-size: 12px; padding: 0 10px; }
+  .notice { font-size: 12px; margin: 0; }
+  .action-bar, body:not(.view3d) .action-bar, .view3d .action-bar { padding: 4px 10px 0; gap: 10px; flex-wrap: nowrap; }
+  .action-bar .btn, body:not(.view3d) .action-bar .btn, .view3d .action-bar .btn { min-height: 38px; font-size: 15px; padding: 6px 12px; max-width: 220px; }
+  .btn-small { padding: 5px 12px; font-size: 12px; min-height: 30px; }
+  .music-toggle { padding: 5px 10px; font-size: 11px; }
+  .table-corner-box { flex-direction: row; align-items: center; gap: 6px; padding-right: 92px; }
+  .opponent-panel, .view3d .opponent-panel { top: 46px; left: 10px; width: 100px; transform: none; }
+  .opponent-card { padding: 6px 6px 5px; gap: 3px; }
+  .opponent-avatar, .view3d .opponent-avatar { width: 28px; height: 28px; font-size: 14px; }
+  .opponent-name { font-size: 11px; }
+  .opponent-activity { font-size: 9px; }
+  .opponent-panel-label { font-size: 8px; }
+}
+@media (max-width: 520px) {
+  .action-bar { flex-wrap: nowrap; gap: 10px; padding-left: 12px; padding-right: 12px; }
+  .action-bar .btn { flex: 1 1 0; min-width: 0; }
+  body:not(.view3d) .action-bar { gap: 10px; }
+}
+@media (max-width: 520px) {
+  .music-toggle { top: max(8px, var(--safe-top)); right: 8px; padding: 5px 10px; font-size: 11px; }   /* no tapa VISTA 2D/3D */
+}
+@media (max-width: 420px) {
+  body:not(.view3d) .opponent-panel { left: 6px; width: 82px; }
+  body:not(.view3d) .opponent-card { padding: 7px 5px; }
+  body:not(.view3d) .opponent-avatar { width: 32px; height: 32px; font-size: 15px; }
+  body:not(.view3d) .opponent-name { font-size: 11px; }
+  body:not(.view3d) .opponent-activity { font-size: 9px; }
+}
+
+/* ------------------------------------- varios oponentes (3 o más jugadores) */
+/* Pantalla grande: columna de recuadros a la izquierda, uno por oponente. */
+body .opponent-panel.multi {
+  top: 100px; left: 14px; width: 112px; transform: none; gap: 6px;
+  max-height: calc(100% - 230px); overflow-y: auto; scrollbar-width: none;
+}
+body .opponent-panel.multi::-webkit-scrollbar { display: none; }
+.opponent-panel.multi .opponent-card { padding: 7px 6px 6px; gap: 3px; }
+.opponent-panel.multi .opponent-panel-label { display: none; }
+.opponent-panel.multi .opponent-avatar { width: 34px; height: 34px; font-size: 16px; }
+.opponent-panel.multi .opponent-name { font-size: 12px; }
+.opponent-panel.multi .opponent-activity { font-size: 10px; }
+
+/* Celular, tablet vertical o pantalla baja: fila horizontal entre la cabecera y la mesa. */
+@media (max-width: 700px), (max-height: 600px) {
+  body .opponent-panel.multi {
+    position: static; flex-direction: row; justify-content: center; align-items: stretch;
+    width: 100%; max-height: none; overflow: visible; padding: 8px 8px 0; gap: 6px; transform: none;
+  }
+  .opponent-panel.multi .opponent-card { flex: 1 1 0; min-width: 0; max-width: 96px; padding: 5px 4px 4px; gap: 2px; }
+  .opponent-panel.multi .opponent-avatar { width: 28px; height: 28px; font-size: 14px; }
+  .opponent-panel.multi .opponent-activity { display: none; }   /* el que juega se resalta con el borde dorado */
+  .opponent-panel.multi .opponent-card.is-active { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(216,178,63,.55), 0 4px 12px rgba(0,0,0,.3); }
+}
+@media (max-height: 520px) {
+  body .opponent-panel.multi { padding: 4px 8px 0; }
+  .opponent-panel.multi .opponent-card { flex-direction: row; gap: 6px; padding: 4px 6px; max-width: 150px; text-align: left; }
+  .opponent-panel.multi .opponent-avatar { width: 24px; height: 24px; font-size: 12px; flex: 0 0 auto; }
+}
+.opponent-panel.multi .opponent-card.is-active { border-color: var(--gold); box-shadow: 0 0 0 2px rgba(216,178,63,.55), 0 4px 12px rgba(0,0,0,.3); }
+@media (max-height: 760px) {
+  .canvas-wrap, .three-wrap { min-height: 260px; }
+}
+@media (max-height: 520px) {
+  .canvas-wrap, .three-wrap { min-height: 0; }
 }

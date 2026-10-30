@@ -53,7 +53,10 @@ CREATE INDEX IF NOT EXISTS acct_games_user_played ON acct_games (user_id, played
 
 class PostgresAccountDatabase:
     def __init__(self, dsn: str):
-        self._pool = ThreadedConnectionPool(1, 5, dsn)
+        # keepalives: el hosting corta las conexiones inactivas; así se detectan y se reabren.
+        self._pool = ThreadedConnectionPool(
+            1, 5, dsn, keepalives=1, keepalives_idle=30, keepalives_interval=10,
+            keepalives_count=3, connect_timeout=10)
         with self._connect() as cur:
             cur.execute(_SCHEMA)
 
@@ -61,11 +64,23 @@ class PostgresAccountDatabase:
     def _connect(self) -> Iterator["psycopg2.extensions.cursor"]:
         conn = self._pool.getconn()
         try:
+            # Una conexión que el servidor cerró por inactividad se descarta y se pide otra.
+            for _ in range(5):
+                if not conn.closed:
+                    try:
+                        with conn.cursor() as ping:
+                            ping.execute("SELECT 1")  # una consulta real detecta conexiones muertas
+                        conn.rollback()
+                        break
+                    except psycopg2.Error:
+                        pass
+                self._pool.putconn(conn, close=True)
+                conn = self._pool.getconn()
             with conn:  # confirma al salir, o revierte si hubo error
                 with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                     yield cur
         finally:
-            self._pool.putconn(conn)
+            self._pool.putconn(conn, close=bool(conn.closed))
 
     @staticmethod
     def _account(row) -> Dict[str, object]:
